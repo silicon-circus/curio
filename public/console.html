@@ -1,0 +1,187 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>archive</title>
+<style>
+  :root{--bg:#0b0d13;--ink:#c9cedb;--dim:#6f7789;--hi:#9fd0ff;--acc:#36ff9e;--panel:#12141f;--line:#242938}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font:12.5px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  header{display:flex;align-items:center;gap:14px;padding:9px 14px;background:var(--panel);
+    border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+  header b{color:#eaf0ff;letter-spacing:2px}
+  .tab{padding:3px 12px;border:1px solid #252b3c;border-radius:4px;color:var(--dim);cursor:pointer}
+  .tab.on{background:#1d2740;color:#eaf0ff;border-color:#33406a}
+  .grow{flex:1}
+  #stat{color:var(--dim)} #stat b{color:var(--hi)}
+  main{padding:14px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+  .card{background:#171b28;border:1px solid #252b3c;border-radius:6px;overflow:hidden;
+    display:flex;flex-direction:column}
+  .card img,.card video{width:100%;height:150px;object-fit:contain;background:#0e111a;display:block}
+  .card .none{height:150px;background:#0e111a;display:flex;align-items:center;justify-content:center;
+    color:#46506b;font-size:30px}
+  .card .body{padding:7px 8px;display:flex;flex-direction:column;gap:6px}
+  .card input{background:#0e111a;border:1px solid #252b3c;color:var(--ink);border-radius:4px;
+    padding:4px 6px;font:inherit;width:100%}
+  .card .meta{color:var(--dim);font-size:11px}
+  .row{display:flex;gap:6px}
+  button{background:#1d2740;border:1px solid #33406a;color:#dfe6f8;border-radius:4px;padding:4px 10px;
+    cursor:pointer;font:inherit}
+  button:hover{background:#26355a}
+  button.bin{background:transparent;border-color:#4a2b34;color:#c98b96}
+  button.bin:hover{background:#2a1a20}
+  table{width:100%;border-collapse:collapse}
+  td{padding:3px 8px 3px 0;border-bottom:1px solid #1a1e2b;vertical-align:middle}
+  td.n{color:#eaf0ff} td.u a{color:var(--hi);text-decoration:none} td.u a:hover{text-decoration:underline}
+  td.s{color:var(--dim);text-align:right;white-space:nowrap}
+  #q{background:#0e111a;border:1px solid #252b3c;color:var(--ink);border-radius:4px;padding:4px 8px;
+    font:inherit;width:280px}
+  pre{background:#0e111a;border:1px solid #1a1e2b;border-radius:5px;padding:9px;color:var(--dim);
+    max-height:230px;overflow:auto;margin:0}
+  .note{color:var(--dim)}
+  .empty{color:var(--dim);padding:26px 0}
+</style>
+
+<header>
+  <b>ARCHIVE</b>
+  <span class="tab on" data-t="intake">intake</span>
+  <span class="tab" data-t="serve">serving</span>
+  <span class="tab" data-t="watch">watch</span>
+  <span class="grow"></span>
+  <span id="stat"></span>
+  <button id="sync">sync</button>
+</header>
+<main id="main"></main>
+
+<script type="module">
+const $ = (t, p = {}, kids = []) => {
+  const n = Object.assign(document.createElement(t), p);
+  for (const k of [].concat(kids)) n.append(k);
+  return n;
+};
+const kb = b => b > 1e6 ? (b/1e6).toFixed(1) + " MB" : (b/1024).toFixed(0) + " kB";
+const main = document.getElementById("main");
+let tab = "intake";
+
+const IMG = /\.(webp|png|jpe?g|gif|svg|avif)$/i, VID = /\.(mp4|webm|mov)$/i, AUD = /\.(wav|mp3|ogg|flac)$/i;
+
+async function stat(){
+  const h = await (await fetch("/health")).json();
+  document.getElementById("stat").innerHTML =
+    `serving <b>${h.serving}</b> · objects <b>${h.objects}</b> · intake <b>${h.intake}</b> · watch <b>${h.watch}</b>`;
+}
+
+// ── intake: the one chore ───────────────────────────────────────────────────
+async function drawIntake(){
+  const { items } = await (await fetch("/api/intake")).json();
+  main.innerHTML = "";
+  if(!items.length){ main.append($("p", { className:"empty" },
+    "intake is empty. Drop files in data/watch/ to file them automatically, or data/intake/ to look at them here.")); return; }
+  const g = $("div", { className:"grid" });
+  for(const it of items){
+    const c = $("div", { className:"card" });
+    if(IMG.test(it.file))      c.append($("img", { src: it.url, loading:"lazy" }));
+    else if(VID.test(it.file)) c.append($("video", { src: it.url, controls:true }));
+    else if(AUD.test(it.file)) c.append($("div", { className:"none" }, "♪"));
+    else                       c.append($("div", { className:"none" }, "▦"));
+    const name = $("input", { value: it.file.replace(/\//g, "."), spellcheck:false });
+    const keep = $("button", {}, "keep");
+    const bin  = $("button", { className:"bin" }, "bin");
+    keep.onclick = async () => {
+      const r = await (await fetch("/api/keep", { method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ file: it.file, name: name.value }) })).json();
+      if(!r.ok) return alert(r.why);
+      c.remove(); stat();
+    };
+    bin.onclick = async () => {
+      await fetch("/api/trash", { method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ file: it.file }) });
+      c.remove(); stat();
+    };
+    c.append($("div", { className:"body" }, [
+      name,
+      $("div", { className:"meta" }, kb(it.size)),
+      $("div", { className:"row" }, [keep, bin]),
+    ]));
+    g.append(c);
+  }
+  main.append(g);
+}
+
+// ── serving: what has a name ────────────────────────────────────────────────
+let q = "";
+async function drawServe(){
+  main.innerHTML = "";
+  const box = $("input", { id:"q", value:q, placeholder:"filter by name…", spellcheck:false });
+  main.append($("div", { style:"margin-bottom:10px" }, box));
+  const host = $("div"); main.append(host);
+  const load = async () => {
+    const r = await (await fetch("/api/serve?limit=400&q=" + encodeURIComponent(q))).json();
+    host.innerHTML = "";
+    host.append($("p", { className:"note" },
+      `${r.total} name${r.total===1?"":"s"}${r.total > r.items.length ? ` (showing ${r.items.length})` : ""} · add ?w=640 to any URL for a resize`));
+    const t = $("table");
+    for(const it of r.items){
+      const un = $("button", { className:"bin" }, "unpublish");
+      un.onclick = async () => {
+        if(!confirm("stop serving " + it.name + "?\n\nThe bytes stay in the store; only the name goes.")) return;
+        await fetch("/api/unpublish", { method:"POST", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({ name: it.name }) });
+        tr.remove(); stat();
+      };
+      const tr = $("tr", {}, [
+        $("td", { className:"n" }, it.name),
+        $("td", { className:"u" }, $("a", { href: it.url, target:"_blank" }, it.url)),
+        $("td", { className:"s" }, kb(it.size)),
+        $("td", { className:"s" }, un),
+      ]);
+      t.append(tr);
+    }
+    host.append(t);
+  };
+  let timer = null;
+  box.oninput = () => { q = box.value; clearTimeout(timer); timer = setTimeout(load, 130); };
+  await load();
+  box.focus();
+}
+
+// ── watch: what filed itself ────────────────────────────────────────────────
+async function drawWatch(){
+  const { log, blocked } = await (await fetch("/api/watch")).json();
+  main.innerHTML = "";
+  main.append($("p", { className:"note" },
+    "Drop a file in data/watch/ with the name you want it served under. It is hashed, stored and published on its own."));
+  const held = Object.entries(blocked || {});
+  if(held.length){
+    main.append($("h3", { style:"margin:16px 0 6px;color:#c98b96;font-size:12.5px" },
+      `${held.length} file${held.length===1?"":"s"} held in watch/ — nothing was ingested`));
+    const t = $("table");
+    for(const [file, why] of held)
+      t.append($("tr", {}, [$("td", { className:"n" }, file), $("td", { className:"s", style:"text-align:left;color:#c98b96" }, why)]));
+    main.append(t);
+    main.append($("p", { className:"note", style:"margin-top:8px" },
+      "Rename the file, or unpublish the name it collides with. It stays where it is until you do."));
+  }
+  main.append($("h3", { style:"margin:16px 0 6px;color:#8b91a3;font-size:12.5px" }, "log"));
+  main.append($("pre", {}, log.length ? log.join("\n") : "nothing filed yet"));
+}
+
+const draw = () => ({ intake: drawIntake, serve: drawServe, watch: drawWatch })[tab]();
+
+for(const el of document.querySelectorAll(".tab")){
+  el.onclick = () => {
+    document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x === el));
+    tab = el.dataset.t; draw();
+  };
+}
+document.getElementById("sync").onclick = async e => {
+  e.target.textContent = "syncing…";
+  const r = await (await fetch("/api/sync", { method:"POST" })).json();
+  e.target.textContent = "sync";
+  alert(`scanned ${r.scanned}\nhashed ${r.hashed}\nnewly stored ${r.ingested}\nnames gone ${r.dropped}`);
+  stat(); draw();
+};
+stat(); draw();
+setInterval(() => { stat(); if(tab !== "serve") draw(); }, 4000);
+</script>

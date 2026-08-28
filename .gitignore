@@ -1,0 +1,15 @@
+# the assets themselves are not source. data/ is the live store; the rest are the
+# pre-server layout, still on disk untouched until you decide to remove them.
+data/
+object/
+source/
+used/
+intake/
+vendor/
+*.tsv
+
+# build
+lib/
+bin/
+.shards/
+*.dwarf

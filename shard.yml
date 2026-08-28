@@ -1,0 +1,22 @@
+name: archive
+version: 0.1.0
+
+description: |
+  Silicon Circus — the asset server. Serves every image, model and sound in the
+  park BY NAME, converting on demand, so no repo ever holds a copy of anything.
+  Four folders and one chore: look at intake/, decide keeper or not.
+
+authors:
+  - Thomas Sawyer <transfire@gmail.com>
+
+targets:
+  archive:
+    main: src/archive.cr
+
+dependencies:
+  kemal:
+    github: kemalcr/kemal
+
+crystal: '>= 1.19.1'
+
+license: MIT
