@@ -148,23 +148,25 @@ async function drawServe(){
 
 // ── watch: what filed itself ────────────────────────────────────────────────
 async function drawWatch(){
-  const { log, blocked } = await (await fetch("/api/watch")).json();
+  const { items } = await (await fetch("/api/watch")).json();
   main.innerHTML = "";
   main.append($("p", { className:"note" },
-    "Drop a file in data/watch/ with the name you want it served under. It is hashed, stored and published on its own."));
-  const held = Object.entries(blocked || {});
-  if(held.length){
-    main.append($("h3", { style:"margin:16px 0 6px;color:#c98b96;font-size:12.5px" },
-      `${held.length} file${held.length===1?"":"s"} held in watch/ — nothing was ingested`));
-    const t = $("table");
-    for(const [file, why] of held)
-      t.append($("tr", {}, [$("td", { className:"n" }, file), $("td", { className:"s", style:"text-align:left;color:#c98b96" }, why)]));
-    main.append(t);
-    main.append($("p", { className:"note", style:"margin-top:8px" },
-      "Rename the file, or unpublish the name it collides with. It stays where it is until you do."));
+    "Drop things in data/watch/ named the way you want them served — a folder keeps its shape as a collection, a file is one asset. Nothing is filed until you run it, so you can put something in and go away."));
+  if(!items.length){ main.append($("p", { className:"empty" }, "watch/ is empty")); return; }
+  const t = $("table");
+  for(const i of items){
+    const tag = { collection: ["COLLECTION", "#9fd0ff"], single: ["FILE", "#c9cedb"], held: ["HELD", "#c98b96"] }[i.kind];
+    t.append($("tr", {}, [
+      $("td", { className:"s", style:`text-align:left;color:${tag[1]};width:96px` }, tag[0]),
+      $("td", { className:"n" }, i.name + (i.kind === "collection" ? "/" : "")),
+      $("td", { className:"s", style:"text-align:left;color:#6f7789" },
+        i.why || (i.files > 1 ? `${i.files} files, ${kb(i.bytes)}` : kb(i.bytes))),
+    ]));
   }
-  main.append($("h3", { style:"margin:16px 0 6px;color:#8b91a3;font-size:12.5px" }, "log"));
-  main.append($("pre", {}, log.length ? log.join("\n") : "nothing filed yet"));
+  main.append(t);
+  main.append($("p", { className:"note", style:"margin-top:12px" },
+    "This is a plan, not a log. Run "), $("code", { style:"color:#36ff9e" }, "just watch"),
+    $("span", { className:"note" }, " to be shown it again in the terminal and asked to confirm."));
 }
 
 const draw = () => ({ intake: drawIntake, serve: drawServe, watch: drawWatch })[tab]();

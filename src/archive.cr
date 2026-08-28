@@ -14,10 +14,6 @@ require "./watch"
 # /a/boardwalk.cattacula.night.real.webp holds no asset, converts nothing, copies nothing, and cannot
 # drift from the master. There is no step between having a picture and using it.
 
-module Archive
-  WATCHER = Watcher.new
-end
-
 Archive::Config.ensure_dirs
 
 before_all do |env|
@@ -85,9 +81,13 @@ get "/intake/*file" do |env|
   send_file env, p
 end
 
+# The console SHOWS the plan; it does not run it. Filing is a command Tom types, because a folder he
+# is still arranging looks exactly like a folder he has finished arranging, and only he knows which.
 get "/api/watch" do |env|
   env.response.content_type = "application/json"
-  {log: Archive::WATCHER.log.last(60), blocked: Archive::WATCHER.blocked}.to_json
+  {items: Archive::Filing.plan.map { |i|
+    {kind: i.kind.to_s.downcase, name: i.name, files: i.files, bytes: i.bytes, why: i.why}
+  }}.to_json
 end
 
 # ── the one chore, both answers ─────────────────────────────────────────────
@@ -132,7 +132,7 @@ get "/health" do |env|
     objects: Dir.exists?(Archive::Config.objects) ? Dir.children(Archive::Config.objects).size : 0,
     intake:  Archive::Store.intake_list.size,
     watch:   Dir.exists?(Archive::Config.watch) ? Dir.children(Archive::Config.watch).size : 0,
-    blocked: Archive::WATCHER.blocked.size,
+    held:    Archive::Filing.plan.count { |i| i.kind.held? },
   }.to_json
 end
 
@@ -180,6 +180,28 @@ if ARGV.includes?("--migrate")
   exit 0
 end
 
+# ── filing what is in watch/ ────────────────────────────────────────────────
+# Prints what it intends to do, then asks. --yes skips the asking, for when you already looked.
+if ARGV.includes?("--watch")
+  Archive::Config.ensure_dirs
+  items = Archive::Filing.plan
+  Archive::Filing.describe(items)
+  todo = items.reject { |i| i.kind.held? }
+  exit 0 if todo.empty?
+  unless ARGV.includes?("--yes")
+    print "\nproceed? [y/N] "
+    answer = STDIN.gets.try(&.strip.downcase)
+    unless answer == "y" || answer == "yes"
+      puts "nothing done"
+      exit 0
+    end
+  end
+  puts
+  r = Archive::Filing.apply(items)
+  puts "\nfiled #{r[:filed]} (#{r[:files]} files) — run `just sync` to index them"
+  exit 0
+end
+
 if ARGV.includes?("--sync")
   Archive::Config.ensure_dirs
   r = Archive::Store.sync
@@ -189,7 +211,5 @@ end
 
 Kemal.config.public_folder = ENV["ARCHIVE_PUBLIC"]? || File.expand_path("../public", __DIR__)
 Kemal.config.port = Archive::Config.port
-
-Archive::WATCHER.run
 
 Kemal.run

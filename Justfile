@@ -37,6 +37,13 @@ run: build
 
 # ── the store ───────────────────────────────────────────────────────────────
 
+# Prints what it intends to do with everything in watch/ -- a top-level directory
+# is a collection and keeps its shape, a top-level file is one asset -- and then
+# asks before doing any of it. `just watch yes` skips the asking.
+[doc('File what is in watch/, after showing you the plan')]
+watch *args:
+    bin/archive --watch {{ if args == "yes" { "--yes" } else { "" } }}
+
 # Hashes names/ — but only files whose size or mtime moved — and files anything
 # the store has not seen into objects/. This is what preserves the version you
 # replaced when you touch a picture up in place.
@@ -106,8 +113,9 @@ todo:
       | python3 -c "import sys,json; d=json.load(sys.stdin)['items']; \
         print(f'{len(d)} in intake'); [print('  ', i['file']) for i in d[:40]]"
     @curl -s http://127.0.0.1:{{ port }}/api/watch \
-      | python3 -c "import sys,json; b=json.load(sys.stdin)['blocked']; \
-        print(f'{len(b)} held in watch'); [print('  ', k, '--', v) for k,v in b.items()]"
+      | python3 -c "import sys,json; d=json.load(sys.stdin)['items']; \
+        print(f'{len(d)} waiting in watch (run: just watch)'); \
+        [print('  ', i['kind'].upper().ljust(11), i['name'], i['why'] and '-- '+i['why'] or '') for i in d]"
 
 [doc('Open the console')]
 open:
