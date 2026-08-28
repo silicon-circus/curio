@@ -60,7 +60,9 @@ module Archive
       else
         File.rename(tmp, obj)
       end
-      File.link(obj, cached) unless File.exists?(cached)
+      # copy, not link -- see Store#ingest. A rule with an exception is a rule someone breaks, and
+      # "nothing is ever hardlinked to an object" is worth more than the nothing this saves.
+      Store.copy_cow(obj, cached) unless File.exists?(cached)
       cached
     end
   end

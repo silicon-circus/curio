@@ -157,11 +157,13 @@ def migrate(root : String)
       if File.exists?(dest)
         skipped += 1
       else
-        begin
-          File.link(path, dest)
+        # objects/ may be hardlinked -- both ends are immutable. names/ may NOT: it is the working
+        # set, and a link would tie an edit there to whatever it came from.
+        ok = (to == Archive::Config.objects) ? (File.link(path, dest); true) : Archive::Store.copy_cow(path, dest)
+        if ok
           linked += 1
           n += 1
-        rescue
+        else
           skipped += 1
         end
       end

@@ -31,11 +31,21 @@ module Archive
     # Put bytes in the store. Returns the hash. If the store already has them, the file we were given
     # is simply linked to what is already there — which is the whole reason the store is
     # content-addressed: the second copy of anything costs nothing and is impossible to miss.
+    # NEVER A HARDLINK INTO THE STORE, and this cost me an object to learn.
+    #
+    # This used to be File.link. sync calls it on files that go on LIVING in names/ — so the moment
+    # an edit was filed away, the new object and the name shared an inode again, which is precisely
+    # the hazard reflink copies were introduced to remove. Twenty minutes later I restored a file
+    # with `cp` (which truncates the destination in place), and the write went straight through the
+    # shared inode into the object. `just verify` found it: an object whose bytes hashed to something
+    # other than its own filename.
+    #   So: copy, never link. It is free on a reflink filesystem, and on one without it is the price
+    # of the store meaning anything at all.
     def ingest(path : String) : String
       hash = sha256(path)
       ext  = File.extname(path).downcase
       dest = object_path(hash, ext)
-      File.link(path, dest) unless File.exists?(dest)
+      copy_cow(path, dest) unless File.exists?(dest)
       hash
     end
 
@@ -157,7 +167,7 @@ module Archive
         ext  = File.extname(rel).downcase
         unless objects.includes?("#{hash}#{ext}")
           dest = object_path(hash, ext)
-          File.link(path, dest) unless File.exists?(dest)
+          copy_cow(path, dest) unless File.exists?(dest)     # copy, never link -- see ingest
           objects << "#{hash}#{ext}"
           ingested += 1
         end
