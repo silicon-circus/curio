@@ -73,6 +73,23 @@ was the wrong answer to all of them:
 `names/` becomes **`assets/`**: it named the mechanism rather than the contents, the same flaw
 `archive` had. The URL is already `/a/`, which now reads as "assets" instead of a leftover.
 
+`trash/` and `backup/history/` are not two attics — they differ by **who decided and why**:
+
+    trash/            YOU decided. "I probably don't need this any more, but not deleting it yet,
+                      just in case." Deliberate, yours to empty, never pruned automatically.
+    backup/history/   THE SYSTEM decided, because bytes were replaced. You never asked for it.
+                      Insurance, and therefore safe to thin on a schedule.
+
+That separation is what makes automatic retention possible at all: history can be pruned precisely
+because nothing in it was put there on purpose. Mixing the two would mean a retention policy that
+quietly deletes things you deliberately set aside.
+
+So `unpublish` keeps moving the file to `trash/` — removing a name is a decision — while the
+invariant `current/` mirrors `assets/` holds regardless: any name that leaves `assets/`, for any
+reason, has its `current/` copy moved to `history/`. The bytes then exist in both, which costs
+nothing because both are reflinks, and means emptying `trash/` cannot destroy the last copy of
+something. Emptying your own pile should not be the same act as discarding the insurance.
+
 `objects/` is **deleted**. Measured: it saved 35 files of dedup out of 1051, held 749 objects
 referenced by no current name, and kept **no record of what any of them used to be called** — so
 "version history, and it's free" was retention without recall. Its removal also takes `ingest`,
@@ -210,9 +227,6 @@ and why. The naming convention. Tom's quote at the top of `curio.cr`.
 
 ## Open
 
-- **Is `trash/` still pulling its weight?** `history/` holds "this was replaced", `trash/` holds "I
-  threw this away", and unpublishing is arguably the last kind of replacement. Two attics may be one
-  too many.
 - **Backup retention.** History grows with editing, and an archived version starts costing real bytes
   once its extent stops being shared. Keep everything, keep N stamps, or thin to one per day after 90?
   "Keep everything" is honest while edits are rare and easy to change later.
