@@ -38,7 +38,7 @@ module Curio
     end
 
     def port : Int32
-      (ENV["CURIO_PORT"]? || "26037").to_i
+      (ENV["CURIO_PORT"]? || "19463").to_i
     end
 
     # LOOPBACK BY DEFAULT, because there is no password on any of this.

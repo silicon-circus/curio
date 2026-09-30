@@ -3,7 +3,7 @@
 The Silicon Circus asset server. Everything the park draws, plays or loads is served from here **by
 name**, so no repo holds a copy of anything.
 
-    just run                             # http://localhost:26037
+    just run                             # http://localhost:19463
 
 (`just run` builds `--release` and exports the paths. A plain `shards build` quietly writes a debug
 binary to the same path, which is easy to leave behind by accident.)
@@ -134,7 +134,7 @@ never depends on the path baked into it.
     bin/curio --sync       hash names/, file anything new into objects/
     bin/curio --migrate    hardlink an older layout in (non-destructive)
 
-    CURIO_PORT    26037
+    CURIO_PORT    19463
     CURIO_BIND    127.0.0.1    0.0.0.0 to expose it — read Deploying first
     CURIO_DATA    ../data      resolved against the SOURCE DIR AT COMPILE TIME
     CURIO_PUBLIC  ../public    likewise
@@ -186,8 +186,8 @@ serving one machine's browser and the wrong shape for anything else — so it bi
 exposing it is something you have to type. `CURIO_BIND=0.0.0.0` belongs only behind something that
 terminates the public side and forwards **reads only**:
 
-    location /a/     { proxy_pass http://127.0.0.1:26037; }
-    location /health { proxy_pass http://127.0.0.1:26037; }
+    location /a/     { proxy_pass http://127.0.0.1:19463; }
+    location /health { proxy_pass http://127.0.0.1:19463; }
     # everything else — / and /api/ and /intake/ — is simply not published
 
 That is the whole security model, and it is a routing decision rather than a feature: the mutating

@@ -11,7 +11,7 @@
 # from a __DIR__ baked in at COMPILE time -- and they agree only while the binary
 # was built in place. `uncache` is `rm -rf {{ data }}/cache/*`, so a divergence
 # does not go unnoticed for long, it just empties the wrong directory.
-port   := env_var_or_default("CURIO_PORT",   "26037")
+port   := env_var_or_default("CURIO_PORT",   "19463")
 data   := env_var_or_default("CURIO_DATA",   justfile_directory() / "data")
 public := env_var_or_default("CURIO_PUBLIC", justfile_directory() / "public")
 env    := "CURIO_PORT=" + port + " CURIO_DATA=" + data + " CURIO_PUBLIC=" + public
