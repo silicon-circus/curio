@@ -13,6 +13,9 @@
 
 mod config;
 mod manifest;
+mod media;
+mod paths;
+mod serve;
 
 use anyhow::Result;
 use axum::{routing::get, Json, Router};
@@ -21,8 +24,9 @@ use serde_json::json;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-struct State {
-    cfg: Config,
+pub struct AppState {
+    pub cfg: Config,
+    pub manifest: manifest::Cache,
 }
 
 #[tokio::main]
@@ -30,8 +34,12 @@ async fn main() -> Result<()> {
     let cfg = Config::from_env(&project_base());
     cfg.ensure_dirs()?;
 
-    let state = Arc::new(State { cfg });
+    let state = Arc::new(AppState {
+        manifest: manifest::Cache::new(cfg.manifest_path()),
+        cfg,
+    });
     let app = Router::new()
+        .route("/a/{*name}", get(serve::asset))
         .route("/health", get(health))
         .with_state(state.clone());
 
@@ -55,7 +63,7 @@ fn project_base() -> PathBuf {
 }
 
 async fn health(
-    axum::extract::State(state): axum::extract::State<Arc<State>>,
+    axum::extract::State(state): axum::extract::State<Arc<AppState>>,
 ) -> Json<serde_json::Value> {
     let cfg = &state.cfg;
     let m = manifest::load(&cfg.manifest_path()).unwrap_or_default();
@@ -99,7 +107,7 @@ mod tests {
         manifest::save(&cfg.manifest_path(), &m).unwrap();
         std::fs::write(cfg.intake().join("waiting.png"), b"x").unwrap();
 
-        let state = Arc::new(State { cfg });
+        let state = Arc::new(AppState { manifest: manifest::Cache::new(cfg.manifest_path()), cfg });
         let Json(v) = health(axum::extract::State(state)).await;
         assert_eq!(v["ok"], true);
         assert_eq!(v["serving"], 3);

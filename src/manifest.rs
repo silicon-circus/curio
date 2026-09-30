@@ -67,6 +67,8 @@ pub fn load(path: &Path) -> Result<Manifest> {
     Ok(rows)
 }
 
+/// Used by `sync` (PORT.md step 4); tests exercise it already.
+#[allow(dead_code)]
 /// Write the manifest via a staging file and a rename, so a reader never sees a half-written one and
 /// an interrupted write cannot leave the store without a manifest at all.
 pub fn save(path: &Path, manifest: &Manifest) -> Result<()> {
@@ -187,6 +189,87 @@ mod tests {
         let (size, _mtime, inode) = stat_of(&path).unwrap();
         assert_eq!(size, 10);
         assert!(inode > 0);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+}
+
+/// THE MANIFEST IS READ ON EVERY ASSET REQUEST, so it is held in memory and reloaded only when the
+/// file on disk actually moves. The Crystal version re-read and re-parsed 1051 rows per request;
+/// measured at 1.5–3 ms, which is survivable and still pointless on the hot path.
+pub struct Cache {
+    path: std::path::PathBuf,
+    inner: std::sync::RwLock<(i64, std::sync::Arc<Manifest>)>,
+}
+
+impl Cache {
+    pub fn new(path: std::path::PathBuf) -> Self {
+        Cache { path, inner: std::sync::RwLock::new((i64::MIN, std::sync::Arc::new(Manifest::new()))) }
+    }
+
+    /// The current manifest, reloaded if `sync` has rewritten it since last time.
+    pub fn get(&self) -> std::sync::Arc<Manifest> {
+        let on_disk = std::fs::metadata(&self.path)
+            .map(|m| {
+                use std::os::unix::fs::MetadataExt;
+                m.mtime() * 1_000_000_000 + m.mtime_nsec()
+            })
+            .unwrap_or(0);
+        if let Ok(guard) = self.inner.read() {
+            if guard.0 == on_disk {
+                return guard.1.clone();
+            }
+        }
+        let fresh = std::sync::Arc::new(load(&self.path).unwrap_or_default());
+        if let Ok(mut guard) = self.inner.write() {
+            *guard = (on_disk, fresh.clone());
+        }
+        fresh
+    }
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn tmp(name: &str) -> PathBuf {
+        let p = std::env::temp_dir().join(format!("curio-cache-{}-{}", name, std::process::id()));
+        let _ = std::fs::remove_dir_all(&p);
+        std::fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    fn one(name: &str, hash: &str) -> Manifest {
+        let mut m = Manifest::new();
+        m.insert(name.into(), Entry {
+            name: name.into(), hash: hash.into(), size: 1, mtime: 1, inode: 1,
+        });
+        m
+    }
+
+    #[test]
+    fn serves_from_memory_then_notices_a_rewrite() {
+        let dir = tmp("reload");
+        let path = dir.join("manifest.tsv");
+        save(&path, &one("a.png", "aaa")).unwrap();
+
+        let cache = Cache::new(path.clone());
+        assert_eq!(cache.get()["a.png"].hash, "aaa");
+        // same file, so the second read comes from memory — same Arc
+        assert!(std::sync::Arc::ptr_eq(&cache.get(), &cache.get()));
+
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        save(&path, &one("a.png", "bbb")).unwrap();
+        assert_eq!(cache.get()["a.png"].hash, "bbb", "a rewritten manifest was not picked up");
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_missing_manifest_is_an_empty_one() {
+        let dir = tmp("absent");
+        let cache = Cache::new(dir.join("nope.tsv"));
+        assert!(cache.get().is_empty());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }
