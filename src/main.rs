@@ -19,6 +19,7 @@ mod filing;
 mod manifest;
 mod media;
 mod paths;
+mod requests;
 mod serve;
 mod store;
 mod sync;
@@ -33,6 +34,7 @@ pub struct AppState {
     pub cfg: Config,
     pub manifest: manifest::Cache,
     pub renderer: derive::Renderer,
+    pub requests: requests::Recorder,
 }
 
 #[tokio::main]
@@ -58,6 +60,17 @@ async fn main() -> Result<()> {
     }
     if flag("--todo") {
         return run_todo(&cfg);
+    }
+    if flag("--requested") {
+        return run_requested(&cfg);
+    }
+    if flag("--unrequested") {
+        return run_unrequested(&cfg);
+    }
+    if flag("--forget-requests") {
+        requests::Recorder::new(cfg.requests_path()).forget()?;
+        println!("  request table cleared — exercise the park and it fills again");
+        return Ok(());
     }
     if flag("--uncache") {
         let n = clear_cache(&cfg)?;
@@ -99,6 +112,7 @@ async fn main() -> Result<()> {
     let state = Arc::new(AppState {
         manifest: manifest::Cache::new(cfg.manifest_path()),
         renderer: derive::Renderer::new(cfg.cache(), jobs, cache_mb * (1 << 20)),
+        requests: requests::Recorder::new(cfg.requests_path()),
         cfg,
     });
     eprintln!("  render jobs {jobs}, cache ceiling {cache_mb} MB");
@@ -120,6 +134,21 @@ async fn main() -> Result<()> {
         .route("/intake/{*file}", get(api::intake_file))
         .merge(writes)
         .with_state(state.clone());
+
+    // Flushed on a timer rather than per request: a park page load is sixty requests and none of
+    // them should wait on a write.
+    if state.requests.enabled() {
+        let s = state.clone();
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(3));
+            loop {
+                tick.tick().await;
+                if let Err(e) = s.requests.flush() {
+                    eprintln!("curio: could not write the request table: {e:#}");
+                }
+            }
+        });
+    }
 
     let addr = format!("{}:{}", state.cfg.bind, state.cfg.port);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
@@ -192,6 +221,9 @@ fn print_help() {
     println!("  curio --uncache           throw away every rendition");
     println!("  curio --dedup [--yes]     share extents between byte-identical assets");
     println!("  curio --rename OLD NEW    state a rename so the history link survives");
+    println!("  curio --requested         every name ever asked for, and what was refused");
+    println!("  curio --unrequested       stored names nobody has asked for");
+    println!("  curio --forget-requests   clear the table before a fresh walkthrough");
     println!("\n  CURIO_PORT {} · CURIO_BIND {} · CURIO_DATA · CURIO_PUBLIC",
         config::DEFAULT_PORT, config::DEFAULT_BIND);
 }
@@ -271,6 +303,87 @@ fn run_find(cfg: &Config, terms: &[String]) -> Result<()> {
             }
         }
     }
+    Ok(())
+}
+
+/// EVERYTHING THAT HAS BEEN ASKED FOR, which is not the same as everything that exists.
+///
+/// The point of this pair is to build a declared list of what a consumer actually needs, and then to
+/// keep checking it. Clear the table, exercise the park, and read it: that is the used set, including
+/// names built at runtime that no grep of the source can find.
+///
+/// It records what was EXERCISED, so it is one of two inputs rather than the answer. Union it with a
+/// static scan of the consumer's own source — seasonal art and a setting nobody toggled will not
+/// appear here, and a name assembled at runtime will not appear there. Where the two disagree is
+/// exactly what is worth looking at.
+fn run_requested(cfg: &Config) -> Result<()> {
+    let Some(path) = cfg.requests_path() else {
+        println!("  recording is off (CURIO_REQUESTS=none)");
+        return Ok(());
+    };
+    let table = requests::load(&path)?;
+    if table.is_empty() {
+        println!("  nothing recorded yet — start curio, use the park, then look again");
+        return Ok(());
+    }
+    let served: Vec<_> = table.iter().filter(|(_, s)| (200..300).contains(&s.status)).collect();
+    let refused: Vec<_> = table.iter().filter(|(_, s)| s.status >= 400).collect();
+    let derived: Vec<_> = served.iter().filter(|(_, s)| !s.derived_from.is_empty()).collect();
+
+    println!("  {} names served, {} of them derived, {} refused\n", served.len(), derived.len(), refused.len());
+    for (name, s) in &served {
+        if s.derived_from.is_empty() {
+            println!("  {:>6}  {}", s.hits, name);
+        } else {
+            println!("  {:>6}  {}   <- {}", s.hits, name, s.derived_from);
+        }
+    }
+    if !refused.is_empty() {
+        // The interesting rows. A name asked for and not served is a broken reference, and nothing
+        // else in curio surfaces one.
+        println!("\n  ASKED FOR AND NOT SERVED — each of these is a broken reference somewhere:");
+        for (name, s) in &refused {
+            println!("  {:>6}  {}  ({})", s.hits, name, s.status);
+        }
+    }
+    Ok(())
+}
+
+/// What is in the store and has never been asked for — the list you would prune by, once you trust
+/// that the park has been exercised properly.
+fn run_unrequested(cfg: &Config) -> Result<()> {
+    let Some(path) = cfg.requests_path() else {
+        println!("  recording is off (CURIO_REQUESTS=none)");
+        return Ok(());
+    };
+    let table = requests::load(&path)?;
+    if table.is_empty() {
+        println!("  nothing recorded yet, so everything would look unused — not printing 1000 names");
+        return Ok(());
+    }
+    let asked: std::collections::BTreeSet<&String> = table.keys().collect();
+    let m = manifest::load(&cfg.manifest_path())?;
+    let mut bytes = 0u64;
+    let mut names = Vec::new();
+    for e in m.values() {
+        // A master that fed a derivation counts as used, even though nobody asked for it by name.
+        let fed_a_rendition = table.values().any(|s| s.derived_from == e.name);
+        if !asked.contains(&e.name) && !fed_a_rendition {
+            bytes += e.size;
+            names.push((e.size, e.name.clone()));
+        }
+    }
+    names.sort_by_key(|(size, _)| std::cmp::Reverse(*size));
+    println!("  {} of {} stored names were never asked for, {:.1} MB\n",
+        names.len(), m.len(), bytes as f64 / 1e6);
+    for (size, name) in names.iter().take(40) {
+        println!("  {:>9}  {}", filing::human(*size), name);
+    }
+    if names.len() > 40 {
+        println!("  ... and {} more", names.len() - 40);
+    }
+    println!("\n  Exercise everything before trusting this: it lists what was not asked for during\n  \
+             whatever you happened to do, and seasonal or conditional art will be in here wrongly.");
     Ok(())
 }
 

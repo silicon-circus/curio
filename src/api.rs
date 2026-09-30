@@ -248,6 +248,7 @@ mod tests {
         let state = Arc::new(AppState {
             manifest: manifest::Cache::new(cfg.manifest_path()),
             renderer: derive::Renderer::new(cfg.cache(), 1, 1 << 20),
+            requests: crate::requests::Recorder::new(None),
             cfg,
         });
         let res = health(State(state)).await;

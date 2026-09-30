@@ -178,6 +178,36 @@ and `.webp` appear once, as the files they are.
     /a/afterimage.tron.vista.webp            172 kB   derived, q82
     /a/afterimage.tron.vista.webp?w=320     12.6 kB   derived and resized
 
+## Working out what is actually used
+
+curio records **one row per distinct name ever asked for** — not a log, because the question is "was
+this ever fetched" rather than "was it fetched ninety-four times". `data/requests.tsv`, or
+`CURIO_REQUESTS` elsewhere, or `none` to turn it off.
+
+    curio --forget-requests     # clear it
+    # ...then exercise the park
+    curio --requested           # what was asked for, what it was derived from, what was refused
+    curio --unrequested         # stored names nobody asked for, largest first
+
+Three things make it more useful than it sounds:
+
+**The cache cannot answer this.** `cache/` holds *renditions*, so anything served straight out of
+`assets/` leaves no trace — measured, it would show 49 of boardwalk's 97 names and look complete while
+missing every webp, glb, wav and mp4 that is stored rather than derived.
+
+**A name asked for and not served is recorded with its status**, which is the only thing in curio that
+surfaces a broken reference. A page asking for `deck.webp` when the store holds
+`boardwalk.deck.webp` shows up as a 404 row instead of as silence.
+
+**It records what a rendition was derived from**, which is the difference between a payload of the
+webp you would bake and one made of the png masters that feed them — 14 MB against 950 MB, on this
+store.
+
+It records what was **exercised**, so it is one of two inputs rather than the answer. Union it with a
+static scan of the consumer's own source: seasonal art and a setting nobody toggled will not appear
+here, and a name assembled at runtime will not appear there. Where the two disagree is exactly what
+is worth looking at.
+
 ## Commands
 
 `curio` is the whole program. The Justfile remembers flags and exports `CURIO_PORT`, `CURIO_DATA` and
@@ -193,6 +223,9 @@ and `.webp` appear once, as the files they are.
     curio --uncache           throw away every rendition
     curio --dedup [--yes]     share extents between byte-identical assets
     curio --rename OLD NEW    state a rename so the history link survives
+    curio --requested         every name ever asked for, and what was refused
+    curio --unrequested       stored names nobody has asked for
+    curio --forget-requests   clear the table before a fresh walkthrough
 
     CURIO_PORT    19463
     CURIO_BIND    127.0.0.1    0.0.0.0 to expose it — read Deploying first
@@ -201,6 +234,7 @@ and `.webp` appear once, as the files they are.
     CURIO_CACHE                renditions (default ~/.cache/curio/<project>)
     CURIO_BACKUP               safety copy (default ~/.local/share/curio/<project>/backup)
                                `none` turns it off — for a server whose masters came from elsewhere
+    CURIO_REQUESTS             the request table (default ./data/requests.tsv; `none` disables)
     CURIO_RENDER_JOBS          concurrent renders (default: half the cores, max 4)
     CURIO_CACHE_MAX_MB         cache ceiling (default 2048)
 

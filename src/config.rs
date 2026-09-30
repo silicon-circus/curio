@@ -161,6 +161,18 @@ impl Config {
     /// What curio knows about assets/ without re-hashing the whole store on every boot.
     pub fn manifest_path(&self) -> PathBuf { self.data_root.join("manifest.tsv") }
 
+    /// One row per distinct name ever requested. `CURIO_REQUESTS=none` turns it off.
+    ///
+    /// In the project root rather than under XDG: it is a small file about THIS store, and its whole
+    /// purpose is to be read by a person working out what a consumer actually fetches.
+    pub fn requests_path(&self) -> Option<PathBuf> {
+        match std::env::var("CURIO_REQUESTS").unwrap_or_default().as_str() {
+            "none" | "off" => None,
+            "" => Some(self.data_root.join("requests.tsv")),
+            other => Some(PathBuf::from(other)),
+        }
+    }
+
     /// Everything this store uses, wherever it has been pointed.
     pub fn dirs(&self) -> Vec<PathBuf> {
         let mut v = vec![self.data_root.clone(), self.assets(), self.cache()];

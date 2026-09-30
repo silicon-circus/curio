@@ -38,6 +38,7 @@ pub async fn asset(
     req: Request,
 ) -> Response {
     let Some(asked) = paths::within(&state.cfg.assets(), &name) else {
+        state.requests.note(&name, 400, None);
         return (StatusCode::BAD_REQUEST, "bad name").into_response();
     };
 
@@ -48,7 +49,10 @@ pub async fn asset(
     let src = if converting {
         match derive::source_for(&asked) {
             Some(s) => s,
-            None => return (StatusCode::NOT_FOUND, "no such asset").into_response(),
+            None => {
+                state.requests.note(&name, 404, None);
+                return (StatusCode::NOT_FOUND, "no such asset").into_response();
+            }
         }
     } else {
         asked.clone()
@@ -61,6 +65,11 @@ pub async fn asset(
 
     let mut path = asked.clone();
     let mut rendition_key: Option<String> = None;
+    // The master a rendition came from: the difference between shipping a 20 MB webp payload and a
+    // 950 MB one made of the pngs that feed it.
+    let derived_source: Option<String> = converting.then(|| {
+        src.strip_prefix(state.cfg.assets()).unwrap_or(&src).to_string_lossy().into_owned()
+    });
 
     if converting || width.is_some() {
         let target_ext = derive::ext_of(&asked);
@@ -122,6 +131,8 @@ pub async fn asset(
 
     // The type comes from the name that was ASKED for, not the file that answered it: /a/foo.webp
     // served out of foo.png is a webp.
+    state.requests.note(&name, 200, derived_source.as_deref());
+
     let served = media::for_path(&asked);
 
     if let Some(inm) = req.headers().get(header::IF_NONE_MATCH).and_then(|v| v.to_str().ok()) {
