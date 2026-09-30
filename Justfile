@@ -164,7 +164,7 @@ du:
 # Renditions are derived from masters and cost only the time to remake them.
 [doc('Throw away every cached rendition')]
 uncache:
-    rm -rf {{ data }}/cache/*
+    find "{{ data }}/cache" -mindepth 1 -delete
     @echo "cache emptied; it rebuilds on demand"
 
 # ── what is in there ────────────────────────────────────────────────────────

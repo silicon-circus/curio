@@ -123,9 +123,23 @@ module Curio
       else
         File.rename(tmp, obj)
       end
+      # STAGE, THEN RENAME. `cp` is not atomic: it creates the destination and then fills it, so
+      # `File.exists?(cached)` at the top of this method was answering "has a copy STARTED", not
+      # "is there a rendition here". A second request arriving mid-copy was handed a truncated file
+      # -- measured: 196 kB of a 68 MB webp, served 200, Content-Type image/webp, and
+      # Cache-Control: max-age=31536000 with no ETag, so the client had no way to ever ask again.
+      # Renaming within one directory is atomic, so `cached` now either does not exist or is whole.
+      #
       # copy, not link -- see Store#ingest. A rule with an exception is a rule someone breaks, and
       # "nothing is ever hardlinked to an object" is worth more than the nothing this saves.
-      Store.copy_cow(obj, cached) unless File.exists?(cached)
+      unless File.exists?(cached)
+        stage = File.join(Config.cache, ".tmp-#{Random.rand(UInt32)}-#{File.basename(cached)}")
+        unless Store.copy_cow(obj, stage)
+          File.delete(stage) if File.exists?(stage)
+          return nil
+        end
+        File.rename(stage, cached)
+      end
       cached
     end
   end

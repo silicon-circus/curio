@@ -68,6 +68,14 @@ module Curio
 
     def ensure_dirs
       [data_root, watch, intake, objects, names, trash, cache].each { |d| Dir.mkdir_p(d) }
+      # A render killed partway -- Ctrl-C on `just dev` is enough -- leaves its scratch file behind,
+      # and nothing ever collected them: `just uncache` was `rm -rf cache/*`, and a glob does not
+      # match dotfiles. They are worthless by definition, so sweep them on the way up.
+      # Dir.children, not Dir.glob: glob skips hidden entries by default, and every one of these is
+      # hidden by design. That is the same trap `rm -rf cache/*` fell into, one line further down.
+      Dir.children(cache).each do |f|
+        File.delete(File.join(cache, f)) if f.starts_with?(".tmp-") rescue nil
+      end
     end
   end
 end
