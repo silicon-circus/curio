@@ -3,14 +3,34 @@
 The Silicon Circus asset server. Everything the park draws, plays or loads is served from here **by
 name**, so no repo holds a copy of anything.
 
-    shards build && ./bin/curio          # http://localhost:26037
+    just run                             # http://localhost:26037
+
+(`just run` builds `--release` and exports the paths. A plain `shards build` quietly writes a debug
+binary to the same path, which is easy to leave behind by accident.)
+
+## Requirements
+
+| | |
+|---|---|
+| **Crystal** ≥ 1.19.1 | `shards install` pulls Kemal, the only dependency |
+| **ImageMagick 7** — `magick` | every resize and every format conversion shells out to it |
+| **A reflink filesystem** | XFS, btrfs, bcachefs, APFS, OpenZFS 2.2+ — see below. ext4 works, it just stops being free |
+| `just` *(optional)* | a convenience layer over `bin/curio`; nothing requires it |
+
+Nothing checks for ImageMagick. The server starts without it, serves every master happily, and fails
+only on the first request that needs a conversion — so confirm it before wondering why
+`/a/foo.webp` is a 500:
+
+    magick -version
 
 ## The workflow
 
 1. Something generates an asset and drops it in **`data/intake/`**.
 2. You look at it in the console. Keep it (with a name) or bin it. **This is the only chore.**
 3. Or, if you already know the name: put the file in **`data/watch/`** named the way you want it
-   served. It files itself.
+   served, then run `just watch`. It prints exactly what it intends to do and asks before doing any
+   of it — a folder you are still arranging looks identical to one you have finished arranging, and
+   only you know which.
 4. Reference it: `/a/boardwalk.cattacula.night.real.webp`, `?w=640` for a resize.
 
 Need a touch-up? Open the file in `data/names/` and edit it. Refresh. Done — same name, same URL,
@@ -76,14 +96,6 @@ and those are very different things to have happened.
 themselves on the next request. A stat, not a hash — this runs on every request, and hashing a 3 MB
 master to serve a 14 kB thumbnail is not a trade.
 
-## Commands
-
-    ./bin/curio              serve
-    ./bin/curio --sync       hash names/, file anything new into objects/
-    ./bin/curio --migrate    hardlink an older layout in (non-destructive)
-
-`CURIO_PORT` (26037), `CURIO_DATA` (`./data`), `CURIO_PUBLIC` (`./public`).
-
 ## Asking for a format that isn't on disk
 
 `/a/foo.webp` is answered from `foo.png` if no `foo.webp` exists. The conversion happens once, is
@@ -110,3 +122,91 @@ Both dials compose: `?w=640` on a derived format resizes and converts in one pas
     /a/afterimage.tron.vista.png            1.75 MB   the master
     /a/afterimage.tron.vista.webp            172 kB   derived, q82
     /a/afterimage.tron.vista.webp?w=320     12.6 kB   derived and resized
+
+## Commands
+
+`bin/curio` is the whole program. The Justfile is a convenience layer over it, and it exports
+`CURIO_PORT`, `CURIO_DATA` and `CURIO_PUBLIC` for every recipe that starts the binary — so a dev run
+never depends on the path baked into it.
+
+    bin/curio              serve
+    bin/curio --watch      file what is in watch/, after printing the plan and asking
+    bin/curio --sync       hash names/, file anything new into objects/
+    bin/curio --migrate    hardlink an older layout in (non-destructive)
+
+    CURIO_PORT    26037
+    CURIO_BIND    127.0.0.1    0.0.0.0 to expose it — read Deploying first
+    CURIO_DATA    ../data      resolved against the SOURCE DIR AT COMPILE TIME
+    CURIO_PUBLIC  ../public    likewise
+
+And through `just`, which on its own lists every recipe:
+
+    just dev             run from source; an edit to src/ is live on restart
+    just run             build --release, then serve
+    just check           does it compile — no binary, fastest feedback
+    just watch [yes]     the plan, then ask. `just watch yes` skips the asking
+    just sync            file edits in names/ away into objects/
+    just verify          re-read every object, check it still hashes to its own name
+    just find TERMS      search the names — `just find cattacula night`
+    just todo            what waits in intake/, and what watch/ is holding
+    just du              what the store actually costs (du lies; df does not)
+    just uncache         throw away every rendition
+    just glb-flatten     rebase a kit's .glb onto flat tagged names
+    just ping / open     health, and the console in a browser
+
+Anything `just` can do that `bin/curio` cannot is a gap in the binary rather than a feature of the
+Justfile. The current list is `find`, `todo`, `verify` and `uncache`.
+
+## The HTTP surface
+
+| | | |
+|---|---|---|
+| `GET` | `/a/*name` | the asset, by name. `?w=` width, `?q=` quality |
+| `GET` | `/` | the console |
+| `GET` | `/health` | liveness and the counts |
+| `GET` | `/api/serve` | what is published. `?q=` filters, `?limit=` caps |
+| `GET` | `/api/intake` | what is waiting to be kept or binned |
+| `GET` | `/api/watch` | what `watch/` would do, as a plan — it does not run it |
+| `GET` | `/intake/*file` | preview a file that has not been kept yet |
+| `POST` | `/api/keep` | keep an intake file under a name |
+| `POST` | `/api/trash` | bin an intake file |
+| `POST` | `/api/unpublish` | remove a name. The object stays |
+| `POST` | `/api/sync` | as `--sync` |
+
+Those four `POST` routes change the store and **none of them authenticates**. The `GET` routes send
+`Access-Control-Allow-Origin: *` so any park repo can embed an asset from its own origin; the `POST`
+routes deliberately do not, so a page in another tab cannot drive them.
+
+## Deploying
+
+Two things will bite before anything else does.
+
+**There is no authentication, and four routes change the store.** That is the right shape for a tool
+serving one machine's browser and the wrong shape for anything else — so it binds `127.0.0.1`, and
+exposing it is something you have to type. `CURIO_BIND=0.0.0.0` belongs only behind something that
+terminates the public side and forwards **reads only**:
+
+    location /a/     { proxy_pass http://127.0.0.1:26037; }
+    location /health { proxy_pass http://127.0.0.1:26037; }
+    # everything else — / and /api/ and /intake/ — is simply not published
+
+That is the whole security model, and it is a routing decision rather than a feature: the mutating
+surface is never reachable, and the console is reached over SSH or a tunnel instead of being
+published. Before curio can accept a write from anywhere but localhost it needs a credential, and it
+does not have one yet.
+
+**The binary is not relocatable.** `CURIO_DATA` and `CURIO_PUBLIC` default to `../data` and
+`../public` resolved against the source directory *at compile time* — Crystal bakes `__DIR__` in. A
+binary built in `/home/you/curio` and copied to a server therefore goes looking for
+`/home/you/curio/data`, finds nothing, and serves an empty store while reporting `"ok": true`. The
+counts in `/health` are the tell. Build in place, or set both:
+
+    CURIO_BIND=0.0.0.0 \
+    CURIO_DATA=/srv/curio/data \
+    CURIO_PUBLIC=/srv/curio/public \
+    bin/curio
+
+`data/` has to live on one filesystem, because reflinks cannot cross a mount.
+
+Nothing in the park hardcodes the port: boardwalk resolves names through `SC_ASSET_BASE`, so
+repointing every venue at a different store — staging, a colleague's — is one variable.

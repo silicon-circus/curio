@@ -98,6 +98,19 @@ trees, and `vendor/*.zip` has the untouched downloads (379 / 361 / 3 files, veri
   basename across collections collide; the stamps are currently masking that. Key on the name
   relative to `names/` with slashes flattened.
 
+- **bin/curio should absorb the Justfile conveniences.** `find`, `todo`, `verify` and `uncache`
+  exist only as recipes, three of them by shelling out to python and curl against a running server.
+  They are the program's own jobs: `--verify` needs nothing but the store, `--find` and `--todo` read
+  what `--sync` already indexes, and `--uncache` is a delete. The Justfile should stay the layer that
+  sets `CURIO_PORT` / `CURIO_DATA` / `CURIO_PUBLIC` and remembers the flags, not the layer that
+  implements behaviour the binary lacks.
+
+- **Writes need a credential before they can come from anywhere but localhost.** `keep`, `trash`,
+  `unpublish` and `sync` are unauthenticated, which is why the bind defaults to `127.0.0.1` and the
+  README's deploy recipe forwards reads only. That is a routing decision standing in for a feature.
+  A shared token in a header checked by one `before_all` on the POST routes would be enough, and
+  would let the console be reachable without a tunnel.
+
 - **intake/ can't take a directory.** Dropping a folder there lists its files individually. `watch/`
   handles collections properly; the console's keep/bin path does not. Needs *keep as collection* and
   *keep contents individually* as separate buttons, and a thumbnail rule for a folder.
