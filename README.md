@@ -229,6 +229,19 @@ routes deliberately do not, so a page in another tab cannot drive them.
 
 ## Deploying
 
+`deploy/curio.service` and `deploy/env.sample`, the same shape as every other venue in the park.
+`EnvironmentFile=/etc/curio/env`; the unit's `StateDirectory=curio` and `CacheDirectory=curio` create
+`/var/lib/curio` and `/var/cache/curio` owned by the service user, and both stay writable under
+`ProtectSystem=strict` without a `ReadWritePaths` line. There is deliberately no backup directory on
+a server: `CURIO_BACKUP=none`, because the masters arrived from a machine that already holds their
+history, so recovery is another rsync rather than a restore.
+
+**Build on the target, or in a container matching it.** The one native dependency is libwebp, vendored
+and linked statically by `libwebp-sys`, so the binary needs only glibc, libm and libgcc at runtime —
+but *which* glibc matters. A binary built on a rolling distribution will refuse to start on a stable
+one with version-symbol errors. Building on the box needs a Rust toolchain and a C compiler.
+
+
 **There is no authentication, and four routes change the store.** Right for a tool serving one
 machine's browser, wrong for anything else — so it binds `127.0.0.1` and exposing it is something you
 type. `CURIO_BIND=0.0.0.0` belongs only behind something that terminates the public side and forwards

@@ -1,0 +1,41 @@
+[Unit]
+Description=Silicon Circus — Curio (the asset server)
+Documentation=https://github.com/silicon-circus/curio
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=curio
+Group=curio
+WorkingDirectory=/opt/curio
+EnvironmentFile=/etc/curio/env
+ExecStart=/opt/curio/bin/curio
+Restart=on-failure
+RestartSec=2
+
+# systemd makes both of these for us, owned by User=, and they stay writable under
+# ProtectSystem=strict without a ReadWritePaths line:
+#   StateDirectory -> /var/lib/curio    the masters. Persistent, and what you rsync up.
+#   CacheDirectory -> /var/cache/curio  renditions. FHS says /var/cache is regenerable, and it is:
+#                                       delete it and the next request rebuilds what it needs.
+# There is deliberately no backup directory. CURIO_BACKUP=none in the env file, because the
+# authoritative store and its version history live on the workstation that authors the art —
+# recovering this box is another rsync, not a restore.
+StateDirectory=curio
+CacheDirectory=curio
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryDenyWriteExecute=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
