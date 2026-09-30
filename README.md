@@ -29,22 +29,39 @@ OpenZFS 2.2+) makes the backup mirror free rather than merely correct; see below
 Need a touch-up? Open the file in `data/assets/` and edit it. Refresh. Done — same name, same URL,
 nothing to update, and the version you replaced is kept.
 
-## The folders
+## A store is a project
 
-| | |
-|---|---|
-| `watch/` | drop it in named; filed after showing you the plan |
-| `intake/` | not looked at yet — keep or bin |
-| `assets/` | **your working set.** The filename is the URL. Edit these freely |
-| `backup/` | `current/` mirrors `assets/`; `history/<stamp>/` holds what was replaced. Read-only |
-| `cache/` | renditions. Disposable, and size-capped |
-| `trash/` | what **you** threw away |
+You point curio at a project root, the way you point git at a repository. One global store for
+everything still works — set `CURIO_DATA` and never move it — but per-project isolates one asset set
+from another, makes a project portable and backed up as a unit, and matters more as more consumers
+than boardwalk appear.
+
+The directories are split by **how much you would mind losing them**, which is why two of them do not
+live in the project at all:
+
+| | | |
+|---|---|---|
+| `assets/` | in the project | **your working set.** The filename is the URL. Edit these freely |
+| `intake/` | in the project | not looked at yet — keep or bin |
+| `watch/` | in the project | drop it in named; filed after showing you the plan |
+| `trash/` | in the project | what **you** threw away |
+| `manifest.tsv` | in the project | what curio knows without re-reading 1.4 GB |
+| the cache | `~/.cache/curio/<project>` | renditions. Regenerable, so out of the working tree |
+| the backup | `~/.local/share/curio/<project>/backup` | `current/` mirrors `assets/`, `history/<stamp>/` keeps what was replaced |
+
+`<project>` is the root's own name plus a digest of its absolute path, so two projects called `art`
+cannot collide. Override either with `CURIO_CACHE` and `CURIO_BACKUP`; `CURIO_BACKUP=none` turns the
+backup off entirely, which is what a headless server wants — its masters arrived from a machine that
+already holds their history.
+
+A safety copy is never kept inside the thing it is a copy of, and XDG *data* rather than XDG cache
+for the backup, because it is the one directory here whose loss cannot be undone by regenerating it.
 
 `trash/` and `backup/history/` are not two attics. They differ by who decided and why: `trash/` is
 yours — *"I probably don't need this, but I'm not deleting it yet"* — and is never pruned on a
 schedule. `history/` is the system keeping bytes nobody asked it to keep, which is exactly why it
-*can* be thinned. Mixing them would mean a retention policy that quietly deletes things you set
-aside on purpose.
+*can* be thinned. Mixing them would mean a retention policy that quietly deletes things you set aside
+on purpose.
 
 There is no `objects/`. It saved 35 files of deduplication out of 1051, held 749 objects that no name
 pointed at, and kept no record of what any of them used to be called — so "version history, and it's
@@ -181,6 +198,9 @@ and `.webp` appear once, as the files they are.
     CURIO_BIND    127.0.0.1    0.0.0.0 to expose it — read Deploying first
     CURIO_DATA    ./data       relative to the working directory, NOT to the binary
     CURIO_PUBLIC  ./public
+    CURIO_CACHE                renditions (default ~/.cache/curio/<project>)
+    CURIO_BACKUP               safety copy (default ~/.local/share/curio/<project>/backup)
+                               `none` turns it off — for a server whose masters came from elsewhere
     CURIO_RENDER_JOBS          concurrent renders (default: half the cores, max 4)
     CURIO_CACHE_MAX_MB         cache ceiling (default 2048)
 
@@ -231,7 +251,28 @@ on the first two lines of its log, and an empty store is always that message rat
     CURIO_PUBLIC=/srv/curio/public \
     curio
 
-`data/` has to live on one filesystem, because reflinks cannot cross a mount.
+`data/` has to live on one filesystem, because reflinks cannot cross a mount. The backup does too, if
+you want it free rather than merely correct — a reflink cannot cross from the project to another
+mount, so a backup on a different disk is a real copy. That is the right trade for a backup on a
+different disk.
+
+**A headless server wants less than a workstation.** Only `assets/` is persistent there; the cache is
+scratch and the backup belongs on the machine that authors the art:
+
+    CURIO_BIND=127.0.0.1 \
+    CURIO_DATA=/var/lib/curio \
+    CURIO_CACHE=/var/cache/curio \
+    CURIO_BACKUP=none \
+    curio
+
+A store whose `assets/` already exists is treated as one somebody else filled, so `intake/`, `watch/`
+and `trash/` are not created — no empty directories implying chores that happen elsewhere.
+
+**Running it under systemd** with `ProtectHome=read-only` needs the two outside directories declared,
+or every derivation fails with a 500 whose only explanation is in the log:
+
+    ReadWritePaths=%h/.cache/curio
+    ReadWritePaths=%h/.local/share/curio
 
 Nothing in the park hardcodes the port: boardwalk resolves names through `SC_ASSET_BASE`, so
 repointing every venue at a different store — staging, a colleague's — is one variable.

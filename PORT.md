@@ -66,8 +66,8 @@ was the wrong answer to all of them:
     assets/   what you edit. The filename is the URL
     watch/    drop it named; files itself after showing the plan and asking
     intake/   the one chore: keep or bin
-    backup/   current/ + history/<stamp>/ — read-only (below)
-    cache/    renditions, disposable, size-capped
+    backup/   OUTSIDE the project — see "A store is a project" in the README
+    cache/    OUTSIDE the project, regenerable, size-capped
     trash/    what you threw away
 
 `names/` becomes **`assets/`**: it named the mechanism rather than the contents, the same flaw

@@ -200,7 +200,7 @@ mod tests {
     fn store(name: &str) -> (std::path::PathBuf, Config) {
         let root = std::env::temp_dir().join(format!("curio-store-{}-{}", name, std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
-        let cfg = Config::for_root(root.clone());
+        let cfg = Config::isolated(root.clone());
         cfg.ensure_dirs().unwrap();
         (root, cfg)
     }

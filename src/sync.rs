@@ -208,9 +208,15 @@ pub fn apply_with_links(
     next: &Manifest,
     links: &[(String, String)],
 ) -> Result<Applied> {
+    let mut out = Applied::default();
+    if !cfg.backup_enabled() {
+        // CURIO_BACKUP=none. A server's masters arrived from a machine that already holds their
+        // history, so keeping a second copy here would be weight without insurance.
+        manifest::save(&cfg.manifest_path(), next)?;
+        return Ok(out);
+    }
     let current = cfg.backup_current();
     let stamp_dir = cfg.backup_history().join(backup::stamp_now());
-    let mut out = Applied::default();
 
     let mut leaving: Vec<String> = Vec::new();
     leaving.extend(plan.edited.iter().cloned());
@@ -358,7 +364,7 @@ mod tests {
         fn new(name: &str) -> Self {
             let root = std::env::temp_dir().join(format!("curio-sync-{}-{}", name, std::process::id()));
             let _ = std::fs::remove_dir_all(&root);
-            let cfg = Config::for_root(root.clone());
+            let cfg = Config::isolated(root.clone());
             cfg.ensure_dirs().unwrap();
             Store { root, cfg }
         }

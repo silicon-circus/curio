@@ -235,7 +235,7 @@ mod tests {
     async fn health_reports_real_counts() {
         let root = std::env::temp_dir().join(format!("curio-api-health-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
-        let cfg = Config::for_root(root.clone());
+        let cfg = Config::isolated(root.clone());
         cfg.ensure_dirs().unwrap();
         let mut m = manifest::Manifest::new();
         for n in ["a.png", "b.png", "c.webp"] {
