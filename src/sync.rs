@@ -277,7 +277,9 @@ pub fn apply_with_links(
 /// Named with a leading dot so it is never mistaken for an archived asset.
 pub const RENAME_LOG: &str = ".renames.tsv";
 
-/// Every rename recorded under `backup/history/`, newest stamp last.
+/// Every rename recorded under `backup/history/`, newest stamp last. Read by nothing yet; it is
+/// the record a history query will want, and writing it is the only moment the fact is knowable.
+#[allow(dead_code)]
 pub fn rename_log(cfg: &Config) -> Vec<(String, String, String)> {
     let mut out = Vec::new();
     let mut stamps: Vec<_> = std::fs::read_dir(cfg.backup_history())

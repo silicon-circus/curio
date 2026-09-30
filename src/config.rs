@@ -169,3 +169,4 @@ mod tests {
         assert_eq!(cfg.bind, "127.0.0.1");
     }
 }
+
