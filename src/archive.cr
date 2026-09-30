@@ -198,7 +198,8 @@ if ARGV.includes?("--watch")
   end
   puts
   r = Archive::Filing.apply(items)
-  puts "\nfiled #{r[:filed]} (#{r[:files]} files) — run `just sync` to index them"
+  puts "\nfiled #{r[:filed]} (#{r[:files]} files)" +
+       (r[:skipped] > 0 ? ", #{r[:skipped]} skipped" : "") + " — run `just sync` to index them"
   exit 0
 end
 

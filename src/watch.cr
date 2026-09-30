@@ -111,17 +111,32 @@ module Archive
       b > 1_000_000 ? "#{(b / 1_000_000.0).round(1)} MB" : "#{(b / 1024.0).round(0).to_i} kB"
     end
 
-    # Do exactly what the plan said, and nothing that was not in it.
-    def apply(items : Array(Item), io : IO = STDOUT) : {filed: Int32, files: Int32}
-      filed = files = 0
+    # Do exactly what the plan said, and nothing that was not in it — INCLUDING checking again.
+    #
+    # The plan tested for collisions and then apply did not, which meant the guarantee only held for
+    # the instant the plan was printed. `cp` overwrites by default, so anything appearing in names/
+    # between the plan and the keypress would have been silently clobbered — and the whole reason
+    # this became a command was to put a human pause exactly there. A promise that only holds while
+    # nobody is looking is not the promise that was made.
+    #
+    # So every destination is re-tested at the moment of writing, and a race loses safely: the file
+    # stays in watch/, is reported, and nothing is overwritten.
+    def apply(items : Array(Item), io : IO = STDOUT) : {filed: Int32, files: Int32, skipped: Int32}
+      filed = files = skipped = 0
       items.each do |i|
         next if i.kind == Kind::Held
         dest = File.join(Config.names, i.name)
+        if File.exists?(dest) || Dir.exists?(dest)
+          io.puts "  SKIPPED #{i.name} — appeared in names/ since the plan was made"
+          skipped += 1
+          next
+        end
         if i.kind == Kind::Collection
           Dir.mkdir_p(dest)
           Store.walk(i.source) do |f, rel|
             Store.ingest(f)                                   # dedup, per file, as always
             target = File.join(dest, rel)
+            next if File.exists?(target)                       # never write over anything, ever
             Dir.mkdir_p(File.dirname(target))
             Store.copy_cow(f, target)
             files += 1
@@ -136,7 +151,7 @@ module Archive
         filed += 1
         io.puts "  filed #{i.name}#{i.kind == Kind::Collection ? "/" : ""}"
       end
-      {filed: filed, files: files}
+      {filed: filed, files: files, skipped: skipped}
     end
 
     def rm_r(path : String)
