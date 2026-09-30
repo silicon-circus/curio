@@ -68,7 +68,7 @@ const IMG = /\.(webp|png|jpe?g|gif|svg|avif)$/i, VID = /\.(mp4|webm|mov)$/i, AUD
 async function stat(){
   const h = await (await fetch("/health")).json();
   document.getElementById("stat").innerHTML =
-    `serving <b>${h.serving}</b> · objects <b>${h.objects}</b> · intake <b>${h.intake}</b> · watch <b>${h.watch}</b>`;
+    `serving <b>${h.serving}</b> · intake <b>${h.intake}</b> · watch <b>${h.watch}</b> · held <b>${h.held}</b>`;
 }
 
 // ── intake: the one chore ───────────────────────────────────────────────────
@@ -181,7 +181,7 @@ document.getElementById("sync").onclick = async e => {
   e.target.textContent = "syncing…";
   const r = await (await fetch("/api/sync", { method:"POST" })).json();
   e.target.textContent = "sync";
-  alert(`scanned ${r.scanned}\nhashed ${r.hashed}\nnewly stored ${r.ingested}\nnames gone ${r.dropped}`);
+  alert(`unchanged ${r.unchanged}\nedited ${r.edited}\nadded ${r.added}\nremoved ${r.removed}\nrenamed ${r.renamed}\nambiguous ${r.ambiguous}\nversions kept ${r.archived}`);
   stat(); draw();
 };
 stat(); draw();
