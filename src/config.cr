@@ -41,6 +41,19 @@ module Curio
       (ENV["CURIO_PORT"]? || "26037").to_i
     end
 
+    # LOOPBACK BY DEFAULT, because there is no password on any of this.
+    #
+    # Four POST routes mutate the store — keep, trash, unpublish, sync — and none of them asks who
+    # is calling. That is exactly right for a tool serving one machine's browser, and exactly wrong
+    # the moment the port is reachable from anywhere else: unpublishing a name is one unauthenticated
+    # request. Kemal binds 0.0.0.0 out of the box, which is a default chosen for demos.
+    #
+    # So the open state is opt-in and has to be typed. Set CURIO_BIND=0.0.0.0 only behind something
+    # that terminates the public side and forwards nothing but GET — see "Deploying" in the README.
+    def bind : String
+      ENV["CURIO_BIND"]? || "127.0.0.1"
+    end
+
     def watch : String   ; File.join(data_root, "watch")   ; end
     def intake : String  ; File.join(data_root, "intake")  ; end
     def objects : String ; File.join(data_root, "objects") ; end

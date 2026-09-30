@@ -5,8 +5,16 @@
 # only the LAST comment line above a recipe as its description, so a multi-line
 # explanation shows up in `just --list` truncated mid-sentence.
 
-port := env_var_or_default("CURIO_PORT", "26037")
-data := env_var_or_default("CURIO_DATA", justfile_directory() / "data")
+# These three are the single source of truth for a dev run, and every recipe that
+# starts the binary exports them. Without that the Justfile and the binary each
+# work out `data/` independently -- just from justfile_directory(), the binary
+# from a __DIR__ baked in at COMPILE time -- and they agree only while the binary
+# was built in place. `uncache` is `rm -rf {{ data }}/cache/*`, so a divergence
+# does not go unnoticed for long, it just empties the wrong directory.
+port   := env_var_or_default("CURIO_PORT",   "26037")
+data   := env_var_or_default("CURIO_DATA",   justfile_directory() / "data")
+public := env_var_or_default("CURIO_PUBLIC", justfile_directory() / "public")
+env    := "CURIO_PORT=" + port + " CURIO_DATA=" + data + " CURIO_PUBLIC=" + public
 
 default:
     @just --list
@@ -19,7 +27,7 @@ deps:
 # src/ is live the moment you restart.
 [doc('Run from source — the everyday one')]
 dev:
-    CURIO_PORT={{ port }} crystal run src/curio.cr
+    {{ env }} crystal run src/curio.cr
 
 [doc('Does it compile? No binary produced — fastest feedback')]
 check:
@@ -33,7 +41,7 @@ build:
 
 [doc('Run the built binary')]
 run: build
-    CURIO_PORT={{ port }} bin/curio
+    {{ env }} bin/curio
 
 # ── the store ───────────────────────────────────────────────────────────────
 
@@ -42,7 +50,7 @@ run: build
 # asks before doing any of it. `just watch yes` skips the asking.
 [doc('File what is in watch/, after showing you the plan')]
 watch *args:
-    bin/curio --watch {{ if args == "yes" { "--yes" } else { "" } }}
+    {{ env }} bin/curio --watch {{ if args == "yes" { "--yes" } else { "" } }}
 
 # Kenney-style kits ship every model referencing one shared atlas by a RELATIVE
 # path (`Textures/colormap.png`), resolved against the .glb's own URL -- so a flat
@@ -113,7 +121,7 @@ glb-flatten src prefix *stems:
 # affect those it would almost always be purposeful and we would rebuild anyway."
 [doc('File any edits in names/ away into objects/')]
 sync:
-    bin/curio --sync
+    {{ env }} bin/curio --sync
 
 # Reads every object and checks its bytes still hash to its own filename. Should
 # be impossible now that names/ are reflink copies, but "should be impossible" is
@@ -141,7 +149,7 @@ verify:
 # Runs the binary as it stands — same reasoning as `sync`.
 [doc('Bring a pre-server layout in, non-destructively')]
 migrate:
-    bin/curio --migrate
+    {{ env }} bin/curio --migrate
 
 # du cannot see shared extents, so it counts a reflink copy in full and reports
 # roughly double. df is the truth.

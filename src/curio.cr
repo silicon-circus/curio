@@ -16,8 +16,14 @@ require "./watch"
 
 Curio::Config.ensure_dirs
 
+# CORS IS FOR READING, NOT FOR WRITING.
+#
+# Every park repo embeds these assets by URL from its own origin, so a wildcard on the reads is the
+# whole point. Putting that same wildcard on the writes meant any page in any tab could POST to
+# /api/unpublish and be told it worked — no password, no origin check, nothing but knowing the port.
+# A GET can only hand out bytes that are meant to be handed out; a POST changes the store.
 before_all do |env|
-  env.response.headers["Access-Control-Allow-Origin"] = "*"
+  env.response.headers["Access-Control-Allow-Origin"] = "*" if env.request.method == "GET"
 end
 
 get "/" do |env|
@@ -225,5 +231,6 @@ end
 
 Kemal.config.public_folder = ENV["CURIO_PUBLIC"]? || File.expand_path("../public", __DIR__)
 Kemal.config.port = Curio::Config.port
+Kemal.config.host_binding = Curio::Config.bind
 
 Kemal.run
