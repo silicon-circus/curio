@@ -12,6 +12,7 @@
 //! size as well as format.
 
 mod config;
+mod derive;
 mod manifest;
 mod media;
 mod paths;
@@ -27,6 +28,7 @@ use std::sync::Arc;
 pub struct AppState {
     pub cfg: Config,
     pub manifest: manifest::Cache,
+    pub renderer: derive::Renderer,
 }
 
 #[tokio::main]
@@ -34,10 +36,17 @@ async fn main() -> Result<()> {
     let cfg = Config::from_env(&project_base());
     cfg.ensure_dirs()?;
 
+    // Bounded by default. Rendering is CPU-bound and every permit is a decode plus a scale held
+    // in memory, so the ceiling is deliberate rather than however many requests arrive at once.
+    let jobs = std::env::var("CURIO_RENDER_JOBS").ok().and_then(|s| s.parse().ok())
+        .unwrap_or_else(|| std::thread::available_parallelism().map(|n| (n.get() / 2).max(1)).unwrap_or(2).min(4));
+    let cache_mb: u64 = std::env::var("CURIO_CACHE_MAX_MB").ok().and_then(|s| s.parse().ok()).unwrap_or(2048);
     let state = Arc::new(AppState {
         manifest: manifest::Cache::new(cfg.manifest_path()),
+        renderer: derive::Renderer::new(cfg.cache(), jobs, cache_mb * (1 << 20)),
         cfg,
     });
+    eprintln!("  render jobs {jobs}, cache ceiling {cache_mb} MB");
     let app = Router::new()
         .route("/a/{*name}", get(serve::asset))
         .route("/health", get(health))
@@ -107,7 +116,11 @@ mod tests {
         manifest::save(&cfg.manifest_path(), &m).unwrap();
         std::fs::write(cfg.intake().join("waiting.png"), b"x").unwrap();
 
-        let state = Arc::new(AppState { manifest: manifest::Cache::new(cfg.manifest_path()), cfg });
+        let state = Arc::new(AppState {
+            manifest: manifest::Cache::new(cfg.manifest_path()),
+            renderer: derive::Renderer::new(cfg.cache(), 1, 1 << 20),
+            cfg,
+        });
         let Json(v) = health(axum::extract::State(state)).await;
         assert_eq!(v["ok"], true);
         assert_eq!(v["serving"], 3);
