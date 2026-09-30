@@ -11,12 +11,14 @@
 //! objects/, bounded render surface, backup built in, and derivation that goes downward only in
 //! size as well as format.
 
+mod backup;
 mod config;
 mod derive;
 mod manifest;
 mod media;
 mod paths;
 mod serve;
+mod sync;
 
 use anyhow::Result;
 use axum::{routing::get, Json, Router};
@@ -35,6 +37,12 @@ pub struct AppState {
 async fn main() -> Result<()> {
     let cfg = Config::from_env(&project_base());
     cfg.ensure_dirs()?;
+
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let flag = |f: &str| args.iter().any(|a| a == f);
+    if flag("--sync") {
+        return run_sync(&cfg, flag("--dry-run"), flag("--yes"));
+    }
 
     // Bounded by default. Rendering is CPU-bound and every permit is a decode plus a scale held
     // in memory, so the ceiling is deliberate rather than however many requests arrive at once.
@@ -57,6 +65,56 @@ async fn main() -> Result<()> {
     eprintln!("curio {} listening on http://{}", env!("CARGO_PKG_VERSION"), addr);
     eprintln!("  assets {}", state.cfg.assets().display());
     axum::serve(listener, app).await?;
+    Ok(())
+}
+
+/// SYNC SHOWS ITS PLAN. Filing the store away is not destructive — every replaced version is kept —
+/// but a rename it cannot infer is a question only Tom can answer, and guessing it would quietly
+/// lose the one fact that cannot be reconstructed afterwards.
+fn run_sync(cfg: &Config, dry_run: bool, yes: bool) -> Result<()> {
+    let (plan, next) = sync::scan(cfg)?;
+    print!("{}", sync::describe(&plan));
+
+    if dry_run {
+        println!("\n  --dry-run, so nothing was written");
+        return Ok(());
+    }
+    if plan.is_quiet() {
+        println!("  nothing to do");
+        return Ok(());
+    }
+
+    // Only a one-to-one pair can be answered with a yes. Anything wider gets reported and left, and
+    // `curio rename` states it explicitly.
+    let mut links = plan.renamed.clone();
+    for a in &plan.ambiguous {
+        if a.gone.len() == 1 && a.appeared.len() == 1 {
+            let (from, to) = (&a.gone[0], &a.appeared[0]);
+            if yes {
+                println!("  --yes, so NOT linked: {from} -> {to}  (state it with `curio rename`)");
+                continue;
+            }
+            print!("\n  is  {to}  a renamed and edited  {from} ? [y/N] ");
+            use std::io::Write;
+            std::io::stdout().flush().ok();
+            let mut line = String::new();
+            if std::io::stdin().read_line(&mut line).is_ok()
+                && matches!(line.trim().to_lowercase().as_str(), "y" | "yes")
+            {
+                links.push((from.clone(), to.clone()));
+                println!("  recorded as a rename");
+            } else {
+                println!("  left unlinked");
+            }
+        }
+    }
+
+    let applied = sync::apply_with_links(cfg, &plan, &next, &links)?;
+    println!("\n  {} version(s) filed into history, mirror refreshed ({} reflinked, {} copied)",
+        applied.archived, applied.reflinked, applied.copied);
+    if let Some(stamp) = applied.stamp {
+        println!("  {}", stamp.display());
+    }
     Ok(())
 }
 

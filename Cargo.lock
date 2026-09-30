@@ -176,6 +176,7 @@ dependencies = [
  "axum",
  "fast_image_resize",
  "image",
+ "libc",
  "serde",
  "serde_json",
  "sha2",
