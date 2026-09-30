@@ -242,10 +242,13 @@ but *which* glibc matters. A binary built on a rolling distribution will refuse 
 one with version-symbol errors. Building on the box needs a Rust toolchain and a C compiler.
 
 
-**There is no authentication, and four routes change the store.** Right for a tool serving one
-machine's browser, wrong for anything else — so it binds `127.0.0.1` and exposing it is something you
-type. `CURIO_BIND=0.0.0.0` belongs only behind something that terminates the public side and forwards
-**reads only**:
+**There is no authentication, and four routes change the store.** So the question is never whether
+curio should be reachable, it is by whom — and the answer is the proxy and nothing else. With the
+proxy on the same box, **keep `CURIO_BIND=127.0.0.1` in production too**: the browser resolves the
+public vhost, the proxy reaches curio over loopback, and the raw port is on no external interface no
+matter what happens to the firewall later. curio generates no absolute URLs, issues no redirects and
+reflects no origins, so it cannot tell the difference. `0.0.0.0` is only for a proxy on a *different*
+host, and then the firewall becomes load-bearing. Either way the vhost forwards **reads only**:
 
     location /a/     { proxy_pass http://127.0.0.1:19463; }
     location /health { proxy_pass http://127.0.0.1:19463; }
