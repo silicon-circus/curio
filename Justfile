@@ -48,7 +48,7 @@ watch *args:
 # the store has not seen into objects/. This is what preserves the version you
 # replaced when you touch a picture up in place.
 [doc('File any edits in names/ away into objects/')]
-sync: build
+sync:
     bin/archive --sync
 
 # Reads every object and checks its bytes still hash to its own filename. Should
@@ -75,7 +75,7 @@ verify:
 # Hardlinks an older layout (object/ source/ used/ vendor/ intake/) into data/.
 # Nothing is moved or deleted; the old folders stay where they are.
 [doc('Bring a pre-server layout in, non-destructively')]
-migrate: build
+migrate:
     bin/archive --migrate
 
 # du cannot see shared extents, so it counts a reflink copy in full and reports
@@ -106,6 +106,11 @@ find *terms:
       | python3 -c "import sys,json; ts='{{ terms }}'.lower().split(); \
         [print(i['url']) for i in json.load(sys.stdin)['items'] \
          if all(t in i['name'].lower() for t in ts)]"
+#
+# Runs the binary as it stands, like `watch` does. It used to depend on `build`,
+# which is `shards build --release` and so a full LLVM pass before every routine
+# sync. Tom: "we are good about staying on top of rebuilding, and if anything would
+# affect those it would almost always be purposeful and we would rebuild anyway."
 
 [doc('What is waiting in intake/, and what watch/ is holding')]
 todo:
@@ -120,3 +125,4 @@ todo:
 [doc('Open the console')]
 open:
     @xdg-open http://127.0.0.1:{{ port }} >/dev/null 2>&1 || echo "http://127.0.0.1:{{ port }}"
+# Runs the binary as it stands — same reasoning as `sync`.
