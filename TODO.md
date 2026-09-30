@@ -84,6 +84,11 @@ trees, and `vendor/*.zip` has the untouched downloads (379 / 361 / 3 files, veri
 
 ## Still open
 
+> **Much of what follows is superseded by [PORT.md](PORT.md)** — the Rust port settled `objects/`,
+> the Python recipes, the render limits, `names/` → `assets/`, caching, and the backup subsystem as
+> design decisions. Items below are kept where the port does not cover them, or where they are the
+> reason the port decided something.
+
 - **Repoint pirateship at curio.** `training-camp-room.js:11` (`MODEL_ROOT`) and three
   hardcoded `"../assets/3D/kenney-pirate/"` in `resources.js:115`, `world3d.html:55`,
   `bottle.html:293`; then delete its local 3 MB copy. Repoint and confirm the scenes load *before*
