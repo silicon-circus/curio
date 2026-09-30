@@ -119,6 +119,17 @@ resizing keeps the old 88. `?q=` overrides all three.
 
 Both dials compose: `?w=640` on a derived format resizes and converts in one pass, one cache entry.
 
+**Asking what is servable is one request.** A derived rendition is never an index entry — only the
+master is stored — so `/api/serve` reports both: `items` is what is on disk, `derivable` is every
+name those masters can additionally answer as, with the master each one comes from. Union the two and
+"will curio serve this name?" is set membership, with no need to know the rules out here:
+
+    GET /api/serve?limit=5000   ->   { total: 1051, items: [...],
+                                       derivable_total: 485, derivable: [{name, from, url}, ...] }
+
+A name published in its own right is never listed as derivable, so the 42 stems held as both `.png`
+and `.webp` appear once, as the files they are.
+
     /a/afterimage.tron.vista.png            1.75 MB   the master
     /a/afterimage.tron.vista.webp            172 kB   derived, q82
     /a/afterimage.tron.vista.webp?w=320     12.6 kB   derived and resized
@@ -164,7 +175,7 @@ Justfile. The current list is `find`, `todo`, `verify` and `uncache`.
 | `GET` | `/a/*name` | the asset, by name. `?w=` width, `?q=` quality |
 | `GET` | `/` | the console |
 | `GET` | `/health` | liveness and the counts |
-| `GET` | `/api/serve` | what is published. `?q=` filters, `?limit=` caps |
+| `GET` | `/api/serve` | what will be served — `items` are stored, `derivable` are names they can answer as. `?q=` filters both, `?limit=` caps both |
 | `GET` | `/api/intake` | what is waiting to be kept or binned |
 | `GET` | `/api/watch` | what `watch/` would do, as a plan — it does not run it |
 | `GET` | `/intake/*file` | preview a file that has not been kept yet |

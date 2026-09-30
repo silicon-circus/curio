@@ -70,18 +70,51 @@ get "/a/*name" do |env|
 end
 
 # ── the console's data ──────────────────────────────────────────────────────
+# WHAT WILL BE SERVED, NOT ONLY WHAT IS STORED.
+#
+# `items` is the index: one row per file in names/. That was the whole answer until formats started
+# being derived, and then it quietly became a lie by omission — a derived rendition is never an index
+# entry, because only the MASTER is stored, so /a/halloween.tent.top.webp answers 200 while
+# halloween.tent.top.webp appears nowhere in this list.
+#
+# Every consumer then has to rebuild the derivation table to tell "curio will not serve this" from
+# "curio will make this": strip the extension, match the stem, HEAD it to be sure. Boardwalk did
+# exactly that, correctly, and should not have had to — the rules are ours and they belong in one
+# place. So `derivable` states them as finished names, and the question "will curio serve this?"
+# goes back to being set membership.
+#
+# `items` and `total` keep their old shape and meaning to the byte: a consumer that only knows about
+# stored files reads exactly what it read before.
 get "/api/serve" do |env|
   env.response.content_type = "application/json"
   q = env.params.query["q"]?.try(&.downcase) || ""
   idx = Curio::Store.load_index
   names = idx.keys.select { |n| q.empty? || n.downcase.includes?(q) }.sort
   limit = (env.params.query["limit"]?.try(&.to_i?) || 500)
+
+  # A derived name that is ALSO published in its own right is not derivable, it is simply a name --
+  # 42 stems are held as both .png and .webp, and listing those twice would be its own wrong answer.
+  published = idx.keys.to_set
+  derivable = [] of NamedTuple(name: String, from: String, url: String)
+  idx.each_key do |n|
+    ext = File.extname(n)
+    Curio::Derive.targets_for(ext).each do |target|
+      d = n.rchop(ext) + target
+      next if published.includes?(d)
+      next unless q.empty? || d.downcase.includes?(q)
+      derivable << {name: d, from: n, url: "/a/#{d}"}
+    end
+  end
+  derivable.sort_by! { |r| r[:name] }
+
   {
     total: names.size,
     items: names.first(limit).map { |n|
       e = idx[n]
       {name: n, hash: e.hash, size: e.size, url: "/a/#{n}"}
     },
+    derivable_total: derivable.size,
+    derivable:       derivable.first(limit),
   }.to_json
 end
 

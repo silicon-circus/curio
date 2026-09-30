@@ -173,12 +173,18 @@ uncache:
 ping:
     @curl -s http://127.0.0.1:{{ port }}/health && echo
 
+# Searches what curio will SERVE, which is not the same as what it stores: the park
+# asks for .webp and most of those are derived from a .png master, so a search that
+# listed only stored files answered half the question -- the same omission /api/serve
+# itself used to make.
 [doc('Search the names — `just find cattacula night`')]
 find *terms:
-    @curl -s "http://127.0.0.1:{{ port }}/api/serve?limit=2000" \
-      | python3 -c "import sys,json; ts='{{ terms }}'.lower().split(); \
-        [print(i['url']) for i in json.load(sys.stdin)['items'] \
-         if all(t in i['name'].lower() for t in ts)]"
+    @curl -s "http://127.0.0.1:{{ port }}/api/serve?limit=5000" \
+      | python3 -c "import sys,json; ts='{{ terms }}'.lower().split(); d=json.load(sys.stdin); \
+        m=lambda n: all(t in n.lower() for t in ts); \
+        [print(i['url']) for i in d['items'] if m(i['name'])]; \
+        [print(r['url'], '  (derived from', r['from'].rsplit('.',1)[1] + ')') \
+         for r in d['derivable'] if m(r['name'])]"
 
 [doc('What is waiting in intake/, and what watch/ is holding')]
 todo:

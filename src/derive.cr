@@ -33,6 +33,18 @@ module Curio
       RASTER.includes?(ext.downcase)
     end
 
+    # DERIVABLE read the other way round: given a master's extension, what else can it answer as?
+    #
+    # `source_for` asks "this name is missing, may I make it?" — the question a request asks. This
+    # asks "what can this master become?", which is the question a LISTING asks, and without it every
+    # consumer has to reimplement the table to tell a name curio will serve from one it will not.
+    # A format never derives itself: a .webp master answers .webp because it IS .webp, not because
+    # anything was made, so it yields nothing here.
+    def targets_for(ext : String) : Array(String)
+      e = ext.downcase
+      DERIVABLE.each.select { |_, sources| sources.includes?(e) }.map { |target, _| target }.to_a
+    end
+
     # The name asked for is not a file. Is it one we are allowed to make, and out of what?
     # Lossless sources are tried first: given both foo.png and foo.jpg, the png is the better parent
     # for a webp because it is the one that has not already lost anything.
