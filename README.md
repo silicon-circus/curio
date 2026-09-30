@@ -184,8 +184,8 @@ curio records **one row per distinct name ever asked for** — not a log, becaus
 this ever fetched" rather than "was it fetched ninety-four times". `data/requests.tsv`, or
 `CURIO_REQUESTS` elsewhere, or `none` to turn it off.
 
-    curio --forget-requests     # clear it
-    # ...then exercise the park
+    curio --forget-requests     # clear it — works on a running server
+    # ...then exercise the consumer: every venue, every page, every setting
     curio --requested           # what was asked for, what it was derived from, what was refused
     curio --unrequested         # stored names nobody asked for, largest first
 

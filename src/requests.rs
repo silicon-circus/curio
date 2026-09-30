@@ -47,13 +47,17 @@ pub struct Recorder {
 struct State {
     table: Table,
     dirty: bool,
+    /// Whether the table has ever been on disk. The difference between "first run, write it" and
+    /// "somebody deleted it, honour that" — see `flush`.
+    on_disk: bool,
 }
 
 impl Recorder {
     /// `None` disables recording entirely, for a server that does not want the write.
     pub fn new(path: Option<PathBuf>) -> Self {
+        let on_disk = path.as_ref().map(|p| p.is_file()).unwrap_or(false);
         let table = path.as_ref().and_then(|p| load(p).ok()).unwrap_or_default();
-        Recorder { path, inner: RwLock::new(State { table, dirty: false }) }
+        Recorder { path, inner: RwLock::new(State { table, dirty: false, on_disk }) }
     }
 
     pub fn enabled(&self) -> bool {
@@ -87,17 +91,33 @@ impl Recorder {
     }
 
     /// Write if anything changed. Called on a timer rather than per request.
+    ///
+    /// A TABLE DELETED UNDERNEATH US IS A RESET, NOT AN ACCIDENT. `curio --forget-requests` runs in
+    /// a separate process and can only remove the file; without this, the running server's in-memory
+    /// copy was written straight back over it on the next tick — measured, 106 rows where there
+    /// should have been 1. Clearing it before a walkthrough is the whole procedure, so it has to
+    /// work on a server that is up, which is the only time anybody would be doing it.
     pub fn flush(&self) -> Result<()> {
         let Some(path) = &self.path else { return Ok(()) };
         let table = {
             let Ok(mut g) = self.inner.write() else { return Ok(()) };
+            if g.on_disk && !path.is_file() {
+                g.table.clear();
+                g.dirty = false;
+                g.on_disk = false;
+                return Ok(());
+            }
             if !g.dirty {
                 return Ok(());
             }
             g.dirty = false;
             g.table.clone()
         };
-        save(path, &table)
+        save(path, &table)?;
+        if let Ok(mut g) = self.inner.write() {
+            g.on_disk = true;
+        }
+        Ok(())
     }
 
     pub fn forget(&self) -> Result<()> {
@@ -211,6 +231,44 @@ mod tests {
         let left: Vec<String> = std::fs::read_dir(&d).unwrap().flatten()
             .map(|e| e.file_name().to_string_lossy().into_owned()).collect();
         assert_eq!(left, vec!["requests.tsv".to_string()]);
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn a_table_deleted_underneath_us_is_honoured_not_overwritten() {
+        // `--forget-requests` is a separate process and can only delete the file. Before this, the
+        // running server wrote its in-memory copy straight back — 106 rows where there should have
+        // been 1 — which silently mixed the previous walkthrough into the next one.
+        let d = tmp("external-clear");
+        let p = d.join("requests.tsv");
+        let r = Recorder::new(Some(p.clone()));
+        for n in ["a.webp", "b.webp", "c.webp"] {
+            r.note(n, 200, None);
+        }
+        r.flush().unwrap();
+        assert_eq!(load(&p).unwrap().len(), 3);
+
+        std::fs::remove_file(&p).unwrap();      // what --forget-requests does
+        r.flush().unwrap();                      // the next tick
+        assert!(r.snapshot().is_empty(), "memory should have been dropped, not rewritten");
+        assert!(!p.exists(), "and nothing written back");
+
+        r.note("fresh.webp", 200, None);         // the walkthrough that follows
+        r.flush().unwrap();
+        let t = load(&p).unwrap();
+        assert_eq!(t.len(), 1, "the new walkthrough must stand alone: {t:?}");
+        assert!(t.contains_key("fresh.webp"));
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn a_first_run_still_writes_even_though_the_file_is_absent() {
+        let d = tmp("firstrun");
+        let p = d.join("requests.tsv");
+        let r = Recorder::new(Some(p.clone()));
+        r.note("a.webp", 200, None);
+        r.flush().unwrap();
+        assert_eq!(load(&p).unwrap().len(), 1, "an absent file on a first run is not a reset");
         std::fs::remove_dir_all(&d).unwrap();
     }
 
