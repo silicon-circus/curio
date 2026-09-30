@@ -111,6 +111,18 @@ trees, and `vendor/*.zip` has the untouched downloads (379 / 361 / 3 files, veri
   A shared token in a header checked by one `before_all` on the POST routes would be enough, and
   would let the console be reachable without a tunnel.
 
+- **The intake workflow scatters, and nothing records where anything went.** Art arrives from
+  @mjanime in the toplevel `intake/` (not `data/intake/`, so the console never sees it), grouped by
+  subject with a README. Naming, rejecting and routing are then all done by hand, and a file can end
+  up in `data/names/`, in a game repo that vendors its own art (`bloom-static`, some `wcfranks`
+  arcade games), or nowhere. Nothing writes down which — the dispositions in `notes/` had to be
+  reconstructed by hashing bytes weeks later, and one pairing could not be recovered at all because
+  the originals had left `intake/` and there was nothing to hash against.
+    Two cheap parts of a fix, before any larger design: have the keep path work on the toplevel
+  `intake/` too, so routing into curio stops being a manual copy that leaves its source behind; and
+  record the delivered name alongside the published one, so the mapping is a fact rather than an
+  inference. `notes/README.md` describes the workflow as it actually is, which is the place to start.
+
 - **intake/ can't take a directory.** Dropping a folder there lists its files individually. `watch/`
   handles collections properly; the console's keep/bin path does not. Needs *keep as collection* and
   *keep contents individually* as separate buttons, and a thumbnail rule for a folder.
