@@ -84,10 +84,10 @@ trees, and `vendor/*.zip` has the untouched downloads (379 / 361 / 3 files, veri
 
 ## Still open
 
-- **Repoint pirateship at the archive.** `training-camp-room.js:11` (`MODEL_ROOT`) and three
+- **Repoint pirateship at curio.** `training-camp-room.js:11` (`MODEL_ROOT`) and three
   hardcoded `"../assets/3D/kenney-pirate/"` in `resources.js:115`, `world3d.html:55`,
   `bottle.html:293`; then delete its local 3 MB copy. Repoint and confirm the scenes load *before*
-  deleting — the local copy has all 72 models and the archive serves 16, so anything choosing a
+  deleting — the local copy has all 72 models and curio serves 16, so anything choosing a
   model name at runtime rather than as a literal string would 404 and a static trace cannot see it.
 
 - **Cache invalidation belongs in `sync`, not in the cache key.** `Derive.cache_name` stamps

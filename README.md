@@ -1,9 +1,9 @@
-# archive
+# curio
 
 The Silicon Circus asset server. Everything the park draws, plays or loads is served from here **by
 name**, so no repo holds a copy of anything.
 
-    shards build && ./bin/archive          # http://localhost:26037
+    shards build && ./bin/curio          # http://localhost:26037
 
 ## The workflow
 
@@ -78,13 +78,13 @@ master to serve a 14 kB thumbnail is not a trade.
 
 ## Commands
 
-    ./bin/archive              serve
-    ./bin/archive --sync       hash names/, file anything new into objects/
-    ./bin/archive --migrate    hardlink an older layout in (non-destructive)
+    ./bin/curio              serve
+    ./bin/curio --sync       hash names/, file anything new into objects/
+    ./bin/curio --migrate    hardlink an older layout in (non-destructive)
 
-`ARCHIVE_PORT` (26037), `ARCHIVE_DATA` (`./data`), `ARCHIVE_PUBLIC` (`./public`).
+`CURIO_PORT` (26037), `CURIO_DATA` (`./data`), `CURIO_PUBLIC` (`./public`).
 
-## Asking for a format the archive hasn't got
+## Asking for a format that isn't on disk
 
 `/a/foo.webp` is answered from `foo.png` if no `foo.webp` exists. The conversion happens once, is
 cached like any other rendition, and the second request is a static file read.

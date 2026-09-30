@@ -1,7 +1,7 @@
 require "./config"
 require "./store"
 
-module Archive
+module Curio
   # watch/ — A COMMAND, NOT A DAEMON.
   #
   # Tom: "A .glb file I dropped in and was about to adjust the name of disappeared instantly. My

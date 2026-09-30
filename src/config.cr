@@ -1,4 +1,4 @@
-module Archive
+module Curio
   # Single source of truth: read from shard.yml at compile time so it cannot drift
   # from the packaged version.
   VERSION = {{ read_file("#{__DIR__}/../shard.yml").split("version:")[1].split("\n")[0].strip }}
@@ -34,11 +34,11 @@ module Archive
     extend self
 
     def data_root : String
-      ENV["ARCHIVE_DATA"]? || File.expand_path("../data", __DIR__)
+      ENV["CURIO_DATA"]? || File.expand_path("../data", __DIR__)
     end
 
     def port : Int32
-      (ENV["ARCHIVE_PORT"]? || "26037").to_i
+      (ENV["CURIO_PORT"]? || "26037").to_i
     end
 
     def watch : String   ; File.join(data_root, "watch")   ; end

@@ -14,7 +14,7 @@ require "./watch"
 # /a/boardwalk.cattacula.night.real.webp holds no asset, converts nothing, copies nothing, and cannot
 # drift from the master. There is no step between having a picture and using it.
 
-Archive::Config.ensure_dirs
+Curio::Config.ensure_dirs
 
 before_all do |env|
   env.response.headers["Access-Control-Allow-Origin"] = "*"
@@ -32,12 +32,12 @@ end
 get "/a/*name" do |env|
   name = env.params.url["name"].to_s
   halt env, 400, "bad name" if name.includes?("..")
-  asked = File.join(Archive::Config.names, name)
+  asked = File.join(Curio::Config.names, name)
 
   # A name that is not a file may still be one we are allowed to MAKE: /a/foo.webp answered out of
   # foo.png. A real file always wins — 42 names are already published in both formats, and a master
   # somebody made by hand is not something to second-guess with an encoder.
-  src = File.file?(asked) ? asked : Archive::Derive.source_for(asked)
+  src = File.file?(asked) ? asked : Curio::Derive.source_for(asked)
   halt env, 404, "no such asset" unless src
 
   width = env.params.query["w"]?.try(&.to_i?)
@@ -47,7 +47,7 @@ get "/a/*name" do |env|
   target = File.extname(asked).downcase
   path = src
   if src != asked || width
-    if made = Archive::Derive.render(src, target, width, quality)
+    if made = Curio::Derive.render(src, target, width, quality)
       path = made
     elsif src != asked
       # There is nothing to fall back ON: the bytes on disk are not the format that was asked for,
@@ -67,7 +67,7 @@ end
 get "/api/serve" do |env|
   env.response.content_type = "application/json"
   q = env.params.query["q"]?.try(&.downcase) || ""
-  idx = Archive::Store.load_index
+  idx = Curio::Store.load_index
   names = idx.keys.select { |n| q.empty? || n.downcase.includes?(q) }.sort
   limit = (env.params.query["limit"]?.try(&.to_i?) || 500)
   {
@@ -81,7 +81,7 @@ end
 
 get "/api/intake" do |env|
   env.response.content_type = "application/json"
-  {items: Archive::Store.intake_list.map { |e|
+  {items: Curio::Store.intake_list.map { |e|
     {file: e[:file], size: e[:size], mtime: e[:mtime], url: "/intake/#{e[:file]}"}
   }}.to_json
 end
@@ -89,7 +89,7 @@ end
 get "/intake/*file" do |env|
   f = env.params.url["file"].to_s
   halt env, 400, "bad name" if f.includes?("..")
-  p = File.join(Archive::Config.intake, f)
+  p = File.join(Curio::Config.intake, f)
   halt env, 404, "no such file" unless File.file?(p)
   send_file env, p
 end
@@ -98,7 +98,7 @@ end
 # is still arranging looks exactly like a folder he has finished arranging, and only he knows which.
 get "/api/watch" do |env|
   env.response.content_type = "application/json"
-  {items: Archive::Filing.plan.map { |i|
+  {items: Curio::Filing.plan.map { |i|
     {kind: i.kind.to_s.downcase, name: i.name, files: i.files, bytes: i.bytes, why: i.why}
   }}.to_json
 end
@@ -109,43 +109,43 @@ post "/api/keep" do |env|
   body = env.params.json
   file = body["file"]?.to_s
   name = body["name"]?.to_s
-  r = Archive::Store.keep(file, name)
+  r = Curio::Store.keep(file, name)
   env.response.status_code = 400 unless r[:ok]
-  {ok: r[:ok], hash: r[:hash], why: r[:why], url: ("/a/" + Archive::Store.safe_name(name))}.to_json
+  {ok: r[:ok], hash: r[:hash], why: r[:why], url: ("/a/" + Curio::Store.safe_name(name))}.to_json
 end
 
 post "/api/trash" do |env|
   env.response.content_type = "application/json"
   body = env.params.json
   file = body["file"]?.to_s
-  ok = Archive::Store.discard(Archive::Config.intake, file)
+  ok = Curio::Store.discard(Curio::Config.intake, file)
   env.response.status_code = 400 unless ok
   {ok: ok}.to_json
 end
 
 post "/api/unpublish" do |env|
   env.response.content_type = "application/json"
-  ok = Archive::Store.unpublish(env.params.json["name"]?.to_s)
+  ok = Curio::Store.unpublish(env.params.json["name"]?.to_s)
   env.response.status_code = 400 unless ok
   {ok: ok}.to_json
 end
 
 post "/api/sync" do |env|
   env.response.content_type = "application/json"
-  Archive::Store.sync.to_json
+  Curio::Store.sync.to_json
 end
 
 get "/health" do |env|
   env.response.content_type = "application/json"
-  idx = Archive::Store.load_index
+  idx = Curio::Store.load_index
   {
     ok:      true,
-    version: Archive::VERSION,
+    version: Curio::VERSION,
     serving: idx.size,
-    objects: Dir.exists?(Archive::Config.objects) ? Dir.children(Archive::Config.objects).size : 0,
-    intake:  Archive::Store.intake_list.size,
-    watch:   Dir.exists?(Archive::Config.watch) ? Dir.children(Archive::Config.watch).size : 0,
-    held:    Archive::Filing.plan.count { |i| i.kind.held? },
+    objects: Dir.exists?(Curio::Config.objects) ? Dir.children(Curio::Config.objects).size : 0,
+    intake:  Curio::Store.intake_list.size,
+    watch:   Dir.exists?(Curio::Config.watch) ? Dir.children(Curio::Config.watch).size : 0,
+    held:    Curio::Filing.plan.count { |i| i.kind.held? },
   }.to_json
 end
 
@@ -154,25 +154,25 @@ end
 # stay exactly where they are until you decide to remove them — at which point the data survives in
 # data/, because it was always the same bytes.
 def migrate(root : String)
-  Archive::Config.ensure_dirs
+  Curio::Config.ensure_dirs
   linked = skipped = 0
-  {"object" => Archive::Config.objects,
-   "used" => Archive::Config.names, "source" => Archive::Config.names,
-   "vendor" => Archive::Config.names, "intake" => Archive::Config.intake}.each do |from, to|
+  {"object" => Curio::Config.objects,
+   "used" => Curio::Config.names, "source" => Curio::Config.names,
+   "vendor" => Curio::Config.names, "intake" => Curio::Config.intake}.each do |from, to|
     src = File.join(root, from)
     next unless Dir.exists?(src)
     n = 0
-    Archive::Store.walk(src) do |path, rel|
+    Curio::Store.walk(src) do |path, rel|
       # flatten the few nested ones onto a dotted name, which is the naming scheme anyway
       name = rel.gsub('/', '.')
       name = "#{from}.#{name}" if from == "vendor"
-      dest = File.join(to, from == "object" ? File.basename(rel) : Archive::Store.safe_name(name))
+      dest = File.join(to, from == "object" ? File.basename(rel) : Curio::Store.safe_name(name))
       if File.exists?(dest)
         skipped += 1
       else
         # objects/ may be hardlinked -- both ends are immutable. names/ may NOT: it is the working
         # set, and a link would tie an edit there to whatever it came from.
-        ok = (to == Archive::Config.objects) ? (File.link(path, dest); true) : Archive::Store.copy_cow(path, dest)
+        ok = (to == Curio::Config.objects) ? (File.link(path, dest); true) : Curio::Store.copy_cow(path, dest)
         if ok
           linked += 1
           n += 1
@@ -189,16 +189,16 @@ end
 
 if ARGV.includes?("--migrate")
   migrate(File.expand_path("..", __DIR__))
-  puts "\nnow run:  ./bin/archive --sync"
+  puts "\nnow run:  ./bin/curio --sync"
   exit 0
 end
 
 # ── filing what is in watch/ ────────────────────────────────────────────────
 # Prints what it intends to do, then asks. --yes skips the asking, for when you already looked.
 if ARGV.includes?("--watch")
-  Archive::Config.ensure_dirs
-  items = Archive::Filing.plan
-  Archive::Filing.describe(items)
+  Curio::Config.ensure_dirs
+  items = Curio::Filing.plan
+  Curio::Filing.describe(items)
   todo = items.reject { |i| i.kind.held? }
   exit 0 if todo.empty?
   unless ARGV.includes?("--yes")
@@ -210,20 +210,20 @@ if ARGV.includes?("--watch")
     end
   end
   puts
-  r = Archive::Filing.apply(items)
+  r = Curio::Filing.apply(items)
   puts "\nfiled #{r[:filed]} (#{r[:files]} files)" +
        (r[:skipped] > 0 ? ", #{r[:skipped]} skipped" : "") + " — run `just sync` to index them"
   exit 0
 end
 
 if ARGV.includes?("--sync")
-  Archive::Config.ensure_dirs
-  r = Archive::Store.sync
+  Curio::Config.ensure_dirs
+  r = Curio::Store.sync
   puts "scanned #{r[:scanned]}, hashed #{r[:hashed]}, newly stored #{r[:ingested]}, gone #{r[:dropped]}"
   exit 0
 end
 
-Kemal.config.public_folder = ENV["ARCHIVE_PUBLIC"]? || File.expand_path("../public", __DIR__)
-Kemal.config.port = Archive::Config.port
+Kemal.config.public_folder = ENV["CURIO_PUBLIC"]? || File.expand_path("../public", __DIR__)
+Kemal.config.port = Curio::Config.port
 
 Kemal.run

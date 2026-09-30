@@ -1,12 +1,12 @@
-# ── Silicon Circus · Archive — the asset server ────────────────────────────
+# ── Silicon Circus · Curio — the asset server ────────────────────────────
 # `just` on its own lists every recipe.
 #
 # Recipe summaries are [doc(...)] attributes rather than plain comments: just uses
 # only the LAST comment line above a recipe as its description, so a multi-line
 # explanation shows up in `just --list` truncated mid-sentence.
 
-port := env_var_or_default("ARCHIVE_PORT", "26037")
-data := env_var_or_default("ARCHIVE_DATA", justfile_directory() / "data")
+port := env_var_or_default("CURIO_PORT", "26037")
+data := env_var_or_default("CURIO_DATA", justfile_directory() / "data")
 
 default:
     @just --list
@@ -19,11 +19,11 @@ deps:
 # src/ is live the moment you restart.
 [doc('Run from source — the everyday one')]
 dev:
-    ARCHIVE_PORT={{ port }} crystal run src/archive.cr
+    CURIO_PORT={{ port }} crystal run src/curio.cr
 
 [doc('Does it compile? No binary produced — fastest feedback')]
 check:
-    crystal build --no-codegen src/archive.cr
+    crystal build --no-codegen src/curio.cr
 
 # --release matters: a plain `shards build` quietly writes a slower debug binary
 # to the same path, which is easy to leave behind by accident.
@@ -33,7 +33,7 @@ build:
 
 [doc('Run the built binary')]
 run: build
-    ARCHIVE_PORT={{ port }} bin/archive
+    CURIO_PORT={{ port }} bin/curio
 
 # ── the store ───────────────────────────────────────────────────────────────
 
@@ -42,7 +42,7 @@ run: build
 # asks before doing any of it. `just watch yes` skips the asking.
 [doc('File what is in watch/, after showing you the plan')]
 watch *args:
-    bin/archive --watch {{ if args == "yes" { "--yes" } else { "" } }}
+    bin/curio --watch {{ if args == "yes" { "--yes" } else { "" } }}
 
 # Kenney-style kits ship every model referencing one shared atlas by a RELATIVE
 # path (`Textures/colormap.png`), resolved against the .glb's own URL -- so a flat
@@ -113,7 +113,7 @@ glb-flatten src prefix *stems:
 # affect those it would almost always be purposeful and we would rebuild anyway."
 [doc('File any edits in names/ away into objects/')]
 sync:
-    bin/archive --sync
+    bin/curio --sync
 
 # Reads every object and checks its bytes still hash to its own filename. Should
 # be impossible now that names/ are reflink copies, but "should be impossible" is
@@ -141,7 +141,7 @@ verify:
 # Runs the binary as it stands — same reasoning as `sync`.
 [doc('Bring a pre-server layout in, non-destructively')]
 migrate:
-    bin/archive --migrate
+    bin/curio --migrate
 
 # du cannot see shared extents, so it counts a reflink copy in full and reports
 # roughly double. df is the truth.

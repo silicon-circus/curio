@@ -1,7 +1,7 @@
 require "digest/sha256"
 require "./config"
 
-module Archive
+module Curio
   # The store: hashing, linking, and the three one-way doors between the folders.
   module Store
     extend self

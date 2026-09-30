@@ -1,7 +1,7 @@
 require "./config"
 require "./store"
 
-module Archive
+module Curio
   # DERIVATIVES ARE OBJECTS TOO.
   #
   # A resized picture is not a new asset, it is the same asset answered differently — so it goes in

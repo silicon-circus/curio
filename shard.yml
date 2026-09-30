@@ -1,4 +1,4 @@
-name: archive
+name: curio
 version: 0.1.0
 
 description: |
@@ -10,8 +10,8 @@ authors:
   - Thomas Sawyer <transfire@gmail.com>
 
 targets:
-  archive:
-    main: src/archive.cr
+  curio:
+    main: src/curio.cr
 
 dependencies:
   kemal:
