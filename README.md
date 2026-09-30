@@ -84,8 +84,29 @@ master to serve a 14 kB thumbnail is not a trade.
 
 `ARCHIVE_PORT` (26037), `ARCHIVE_DATA` (`./data`), `ARCHIVE_PUBLIC` (`./public`).
 
-## Not yet
+## Asking for a format the archive hasn't got
 
-Format derivation — `/a/foo.webp` from a `foo.png` master. Deriving downward only (png/jpg → webp,
-never the reverse), so a master is always available in its own format and nothing fabricates a
-lossless original out of lossy bytes.
+`/a/foo.webp` is answered from `foo.png` if no `foo.webp` exists. The conversion happens once, is
+cached like any other rendition, and the second request is a static file read.
+
+**An existing webp wins over a generated one.** You always get the format you asked for; the only
+question is where those webp bytes come from. 42 names are published as *both* `.png` and `.webp`,
+and for those the file you made by hand is served as-is rather than re-encoded out of the png.
+Derivation fills a gap, it does not overrule a master.
+
+**Downward only.** png/jpg → webp, and nothing in the other direction. A `.png` conjured out of
+`.webp` bytes would be a lossless-looking file that is nothing of the sort, and every name it was
+served under would be a quiet lie about what the archive holds. Ask for a format no master can
+legally produce and you get a 404, not a fake.
+
+**Quality follows the source**, because 82 does not mean the same thing twice. Encoding webp from a
+png is compressing a picture, and the artifacts are the first the file has ever carried — 82 is
+plenty. Encoding webp from a jpg is a *second* lossy pass over bytes that are already dented, and
+the encoder cannot tell inherited artifacts from detail, so it gets more room: 90. Same-format
+resizing keeps the old 88. `?q=` overrides all three.
+
+Both dials compose: `?w=640` on a derived format resizes and converts in one pass, one cache entry.
+
+    /a/afterimage.tron.vista.png            1.75 MB   the master
+    /a/afterimage.tron.vista.webp            172 kB   derived, q82
+    /a/afterimage.tron.vista.webp?w=320     12.6 kB   derived and resized

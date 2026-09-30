@@ -32,17 +32,30 @@ end
 get "/a/*name" do |env|
   name = env.params.url["name"].to_s
   halt env, 400, "bad name" if name.includes?("..")
-  path = File.join(Archive::Config.names, name)
-  halt env, 404, "no such asset" unless File.file?(path)
+  asked = File.join(Archive::Config.names, name)
 
-  if (w = env.params.query["w"]?)
-    width = w.to_i?
-    if width && width > 0 && width <= 8192
-      q = (env.params.query["q"]?.try(&.to_i?) || 88).clamp(1, 100)
-      if made = Archive::Derive.resized(path, width, q)
-        path = made
-      end
+  # A name that is not a file may still be one we are allowed to MAKE: /a/foo.webp answered out of
+  # foo.png. A real file always wins — 42 names are already published in both formats, and a master
+  # somebody made by hand is not something to second-guess with an encoder.
+  src = File.file?(asked) ? asked : Archive::Derive.source_for(asked)
+  halt env, 404, "no such asset" unless src
+
+  width = env.params.query["w"]?.try(&.to_i?)
+  width = nil unless width && width > 0 && width <= 8192
+  quality = env.params.query["q"]?.try(&.to_i?).try(&.clamp(1, 100))
+
+  target = File.extname(asked).downcase
+  path = src
+  if src != asked || width
+    if made = Archive::Derive.render(src, target, width, quality)
+      path = made
+    elsif src != asked
+      # There is nothing to fall back ON: the bytes on disk are not the format that was asked for,
+      # and serving a png under a .webp name would be a lie the browser believes.
+      halt env, 500, "could not render #{target} from #{File.extname(src)}"
     end
+    # A failed RESIZE is a different matter — the master is still a correct answer to the name, just
+    # larger than asked for. Serve it whole rather than fail the page over a thumbnail.
   end
   # Content-addressed underneath, so a given URL+width is the same bytes for ever. Long cache, and a
   # weak validator for the name itself in case a name is ever repointed.
