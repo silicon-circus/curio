@@ -1,6 +1,6 @@
 [package]
 name = "curio"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 description = "The Silicon Circus asset server. Serves every image, model and sound in the park by name, converting on demand, so no repo ever holds a copy of anything."
 authors = ["Thomas Sawyer <transfire@gmail.com>"]

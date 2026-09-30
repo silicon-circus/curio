@@ -88,7 +88,21 @@ pub async fn asset(
         }
     }
 
+    // A rendition can still vanish between being made and being sent — another request's eviction,
+    // or somebody clearing the cache by hand. Remaking it is cheap and correct; answering 404 would
+    // be a lie the caller cannot distinguish from a name that does not exist, so it would not retry.
+    if rendition_key.is_some() && !path.is_file() {
+        if let Ok(r) = state.renderer.render(&src, &name, &derive::ext_of(&asked), width, quality).await {
+            rendition_key = r.path_key();
+            path = r.path;
+        }
+    }
     if !path.is_file() {
+        // The master itself is gone, which is a genuine 404 — or the render failed twice, which is
+        // not, and says so.
+        if rendition_key.is_some() {
+            return (StatusCode::SERVICE_UNAVAILABLE, "rendition could not be made").into_response();
+        }
         return (StatusCode::NOT_FOUND, "no such asset").into_response();
     }
 

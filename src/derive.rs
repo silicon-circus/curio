@@ -167,6 +167,14 @@ pub struct Rendition {
     pub derived: bool,
 }
 
+impl Rendition {
+    /// The cache filename, which encodes everything that determines the bytes — the master's size
+    /// and mtime, the width, the quality — and is therefore a strong validator for this URL.
+    pub fn path_key(&self) -> Option<String> {
+        self.derived.then(|| self.path.file_name().map(|n| n.to_string_lossy().into_owned()))?
+    }
+}
+
 impl Renderer {
     pub fn new(cache_dir: PathBuf, jobs: usize, max_cache_bytes: u64) -> Self {
         Renderer { cache_dir, permits: Arc::new(Semaphore::new(jobs.max(1))), max_cache_bytes }
@@ -270,7 +278,7 @@ fn render_blocking(
         return Err(e).context("publishing rendition into cache");
     }
 
-    evict_to_fit(cache_dir, max_cache_bytes)?;
+    evict_to_fit(cache_dir, max_cache_bytes, &cached)?;
     Ok(Rendition { path: cached, derived: true })
 }
 
@@ -379,11 +387,24 @@ fn encode(img: &image::DynamicImage, target_ext: &str, quality: Option<u8>) -> R
 
 /// cache/ is disposable, so it gets a ceiling rather than a promise. Oldest first, because a
 /// rendition nobody has asked for recently is the cheapest one to lose.
-fn evict_to_fit(cache_dir: &Path, max_bytes: u64) -> Result<()> {
+///
+/// WITH A GRACE PERIOD, AND THAT IS NOT A DETAIL. Eviction runs at the end of every render, so
+/// without one it deletes renditions that OTHER requests published moments ago and are still about
+/// to send — measured, 14 of 60 concurrent requests came back 404 with a 1 MB ceiling. A 404 is the
+/// worst possible answer to that, because it is indistinguishable from "no such asset": the caller
+/// cannot tell it from a name that does not exist and will not retry. So anything younger than the
+/// grace period is off limits, as is the rendition this render just made.
+///
+/// A cache ceiling smaller than the working set therefore gets exceeded rather than enforced. That
+/// is the right way round: a soft cap briefly overshot costs disk, and a hard one costs correctness.
+const EVICT_GRACE: std::time::Duration = std::time::Duration::from_secs(60);
+
+fn evict_to_fit(cache_dir: &Path, max_bytes: u64, just_written: &Path) -> Result<()> {
     if max_bytes == 0 {
         return Ok(());
     }
-    let mut entries: Vec<(i64, u64, PathBuf)> = Vec::new();
+    let now = std::time::SystemTime::now();
+    let mut eligible: Vec<(std::time::SystemTime, u64, PathBuf)> = Vec::new();
     let mut total: u64 = 0;
     for e in std::fs::read_dir(cache_dir)? {
         let e = e?;
@@ -391,26 +412,35 @@ fn evict_to_fit(cache_dir: &Path, max_bytes: u64) -> Result<()> {
         if name.starts_with(crate::config::SCRATCH_PREFIX) {
             continue;
         }
-        if let Ok(m) = e.metadata() {
-            if m.is_file() {
-                use std::os::unix::fs::MetadataExt;
-                total += m.len();
-                entries.push((m.mtime(), m.len(), e.path()));
-            }
+        let Ok(m) = e.metadata() else { continue };
+        if !m.is_file() {
+            continue;
         }
+        total += m.len();
+        if e.path() == just_written {
+            continue;
+        }
+        let modified = m.modified().unwrap_or(std::time::UNIX_EPOCH);
+        if now.duration_since(modified).map(|age| age < EVICT_GRACE).unwrap_or(true) {
+            continue; // young enough that something may still be sending it
+        }
+        eligible.push((modified, m.len(), e.path()));
     }
     if total <= max_bytes {
         return Ok(());
     }
-    entries.sort_by_key(|(mtime, _, _)| *mtime);
-    for (_, len, path) in entries {
+    eligible.sort_by_key(|(modified, _, _)| *modified);
+    for (_, len, path) in eligible {
         if total <= max_bytes {
-            break;
+            return Ok(());
         }
         if std::fs::remove_file(&path).is_ok() {
             total = total.saturating_sub(len);
         }
     }
+    eprintln!("curio: cache is {} MB over its {} MB ceiling and everything else is too new to \
+        evict — raise CURIO_CACHE_MAX_MB if this persists",
+        (total.saturating_sub(max_bytes)) / (1 << 20), max_bytes / (1 << 20));
     Ok(())
 }
 
@@ -669,6 +699,85 @@ mod tests {
         let total: u64 = std::fs::read_dir(d.join("cache")).unwrap().flatten()
             .filter_map(|e| e.metadata().ok()).map(|m| m.len()).sum();
         assert!(total <= 20_000 + 8_000, "cache grew past its ceiling: {total} bytes");
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod eviction_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn eviction_never_takes_a_rendition_another_request_just_made() {
+        // Measured before this guard existed: 14 of 60 concurrent requests came back 404, because
+        // eviction runs at the end of every render and deleted what its neighbours had just
+        // published. A 404 is the worst possible answer, being indistinguishable from a name that
+        // does not exist — so the caller cannot tell it apart and will not retry.
+        let d = std::env::temp_dir().join(format!("curio-evictrace-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("cache")).unwrap();
+
+        // twelve distinct masters, and a ceiling far too small for all of them
+        let mut srcs = Vec::new();
+        for i in 0..12u32 {
+            let p = d.join(format!("m{i}.png"));
+            let img = image::RgbImage::from_fn(300, 300, |x, y| {
+                image::Rgb([(x % 256) as u8, (y % 256) as u8, (i * 20) as u8])
+            });
+            image::DynamicImage::ImageRgb8(img).save(&p).unwrap();
+            srcs.push((format!("m{i}.png"), p));
+        }
+        let r = Arc::new(Renderer::new(d.join("cache"), 4, 16 * 1024));
+
+        let mut handles = Vec::new();
+        for _round in 0..3 {
+            for (name, path) in &srcs {
+                let r = r.clone();
+                let (name, path) = (name.clone(), path.clone());
+                handles.push(tokio::spawn(async move {
+                    let got = r.render(&path, &name, "webp", Some(128), None).await.unwrap();
+                    // the file must still be there when we come to send it
+                    got.path.is_file()
+                }));
+            }
+        }
+        let mut vanished = 0;
+        for h in handles {
+            if !h.await.unwrap() {
+                vanished += 1;
+            }
+        }
+        assert_eq!(vanished, 0, "{vanished} renditions were evicted before they could be served");
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[tokio::test]
+    async fn eviction_still_works_once_the_grace_period_has_passed() {
+        let d = std::env::temp_dir().join(format!("curio-evictold-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let cache = d.join("cache");
+        std::fs::create_dir_all(&cache).unwrap();
+
+        // pre-existing renditions, backdated past the grace period
+        let old_time = std::time::SystemTime::now() - (EVICT_GRACE * 2);
+        for i in 0..6 {
+            let p = cache.join(format!("old{i}.s1.m1.q82.webp"));
+            std::fs::write(&p, vec![0u8; 8 * 1024]).unwrap();
+            let f = std::fs::File::options().write(true).open(&p).unwrap();
+            f.set_modified(old_time).unwrap();
+        }
+        let before: u64 = std::fs::read_dir(&cache).unwrap().flatten()
+            .filter_map(|e| e.metadata().ok()).map(|m| m.len()).sum();
+
+        let src = d.join("m.png");
+        image::DynamicImage::ImageRgb8(image::RgbImage::new(200, 200)).save(&src).unwrap();
+        Renderer::new(cache.clone(), 1, 16 * 1024)
+            .render(&src, "m.png", "webp", Some(64), None).await.unwrap();
+
+        let after: u64 = std::fs::read_dir(&cache).unwrap().flatten()
+            .filter_map(|e| e.metadata().ok()).map(|m| m.len()).sum();
+        assert!(after < before, "nothing was evicted: {before} -> {after}");
+        assert!(after <= 24 * 1024, "still far over the ceiling: {after}");
         std::fs::remove_dir_all(&d).unwrap();
     }
 }
