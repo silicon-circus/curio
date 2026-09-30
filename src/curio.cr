@@ -16,14 +16,41 @@ require "./watch"
 
 Curio::Config.ensure_dirs
 
-# CORS IS FOR READING, NOT FOR WRITING.
+# CORS IS FOR READING, NOT FOR WRITING — AND CORS IS NOT THE CONTROL.
 #
 # Every park repo embeds these assets by URL from its own origin, so a wildcard on the reads is the
-# whole point. Putting that same wildcard on the writes meant any page in any tab could POST to
-# /api/unpublish and be told it worked — no password, no origin check, nothing but knowing the port.
-# A GET can only hand out bytes that are meant to be handed out; a POST changes the store.
+# whole point. A GET can only hand out bytes that are meant to be handed out; a POST changes the
+# store, so the wildcard stops at GET.
+#
+# But dropping the header only stops the attacker READING the reply. It never stopped the request:
+# a form POST is a "simple" request, needs no preflight, and /api/sync does not even look at the
+# body — so it ran. And nothing validated Host, which is what makes DNS rebinding work: a page on
+# evil.example with a zero TTL rebinds to 127.0.0.1, is then genuinely same-origin, and every
+# content type is free. Binding to loopback stops the network. It does not stop the browser.
+#
+# So a mutating request must prove it came from this machine: a loopback Host, and — when the
+# browser sends one — an Origin that is this server. The console is served from here, so it passes
+# without knowing any of this exists.
+LOOPBACK = {"127.0.0.1", "localhost", "[::1]", "::1"}
+
+def loopback_host?(host : String) : Bool
+  name = host.starts_with?('[') ? host[0, (host.index(']') || host.size - 1) + 1] : host.split(':').first
+  LOOPBACK.includes?(name)
+end
+
 before_all do |env|
-  env.response.headers["Access-Control-Allow-Origin"] = "*" if env.request.method == "GET"
+  if env.request.method == "GET"
+    env.response.headers["Access-Control-Allow-Origin"] = "*"
+  else
+    unless loopback_host?(env.request.headers["Host"]?.to_s)
+      halt env, 403, "curio takes writes from this machine only"
+    end
+    if origin = env.request.headers["Origin"]?
+      unless LOOPBACK.any? { |h| origin == "http://#{h}:#{Curio::Config.port}" }
+        halt env, 403, "cross-origin write refused"
+      end
+    end
+  end
 end
 
 get "/" do |env|

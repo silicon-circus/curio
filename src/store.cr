@@ -72,8 +72,8 @@ module Curio
     # THE ONE CHORE, ANSWERED YES. Hash it, name it, and drop the intake link — the bytes never
     # move, so this cannot fail halfway and leave a file in two states.
     def keep(file : String, name : String) : {ok: Bool, hash: String, why: String}
-      src = File.join(Config.intake, file)
-      return {ok: false, hash: "", why: "no such file in intake"} unless File.file?(src)
+      src = within(Config.intake, file)
+      return {ok: false, hash: "", why: "no such file in intake"} unless src && File.file?(src)
       name = safe_name(name)
       return {ok: false, hash: "", why: "bad name"} if name.empty?
       if File.exists?(File.join(Config.names, name))
@@ -91,8 +91,8 @@ module Curio
     # the second one gets a suffix, because silently overwriting the first would be exactly the loss
     # trash/ exists to prevent.
     def discard(dir : String, file : String) : Bool
-      src = File.join(dir, file)
-      return false unless File.file?(src)
+      src = within(dir, file)
+      return false unless src && File.file?(src)
       dest = File.join(Config.trash, File.basename(file))
       n = 1
       while File.exists?(dest)
@@ -108,6 +108,27 @@ module Curio
     # and even if nothing is, an archive that deletes data when you rename a link is not an archive.
     def unpublish(name : String) : Bool
       discard(Config.names, name)
+    end
+
+    # A PATH THAT CAME FROM A REQUEST IS NOT A PATH UNTIL IT HAS BEEN PROVED TO STAY PUT.
+    #
+    # keep and discard both take a filename out of an HTTP body and File.join it to a directory, and
+    # File.join does not care about "..". So {"file":"../../.ssh/id_ed25519"} named any file this
+    # process could read: keep published it under a name the caller chose AND DELETED THE ORIGINAL,
+    # discard renamed it into trash/. The two GET routes had a ".." guard all along. The four routes
+    # that actually mutate the filesystem had nothing — the guard was on the door nobody came through.
+    #
+    # Lexical containment catches "..". realpath additionally catches a symlink planted inside the
+    # directory, which no amount of string inspection can see.
+    def within(dir : String, rel : String) : String?
+      return nil if rel.empty? || rel.starts_with?('/')
+      root = File.expand_path(dir)
+      path = File.expand_path(File.join(root, rel))
+      return nil unless path.starts_with?(root + File::SEPARATOR)
+      if File.exists?(path)
+        return nil unless File.realpath(path).starts_with?(File.realpath(root) + File::SEPARATOR)
+      end
+      path
     end
 
     # A name is a URL, so it has to survive being one, and it has to stay inside serve/.
