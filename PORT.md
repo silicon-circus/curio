@@ -1,12 +1,32 @@
-# Porting curio to Rust
+# Porting curio to Rust — DELIVERED
 
-Not a translation. The Crystal works; what it lacks is bounded surfaces, a test suite, and a backup
-story that can answer "what was this file yesterday". Those get designed here and built once, rather
-than bolted onto a rewrite.
+**Done, 2026-09-30, v0.2.0.** Kept as the record of what was decided and why, not as a plan. The
+Crystal is deleted; `assets/`, `manifest.tsv` and the split-out cache and backup are the live layout.
 
-Decided in session, 2026-09-30. **Crystal keeps serving until Rust reaches parity**, then the `.cr`
-files and `shard.yml` go in one commit. `Cargo.toml` sits beside `shard.yml`; Cargo takes
-`src/main.rs`, Crystal takes `src/curio.cr`, and they do not collide.
+What shipped against what this file planned: all eight steps, plus two things the plan did not
+anticipate. Cyclops's durability split — cache and backup out of the project, keyed to it, each
+independently configurable — landed in `6ec93dc`. And `deploy/curio.service` with `env.sample`, in the
+shape every other venue uses, landed in `10bb87d`.
+
+Measured on the live store: 1051 assets, all 57 of boardwalk's refs serving, full-size conversion
+byte-identical to ImageMagick, a read-only reflink mirror for 804 KB against 1.4 GB apparent, 75
+tests.
+
+Four things this plan got wrong, all found by building rather than reasoning, and all now recorded in
+the source beside the code they concern:
+
+- **Alpha premultiplication was the right worry and the wrong danger.** It never fringed in practice.
+  The real defects were 16-bit masters — 163 of the 522 PNGs, every one a 500 until fixed — and an
+  invented all-255 alpha plane making every rendition a quarter larger.
+- **Lanczos3 was the wrong filter**, for a reason about the encoder rather than the pixels. Mitchell,
+  by measurement: +19.2% median against ImageMagick versus −2.6%.
+- **Widths quantise to 64px steps**, which settles the open question this file ended on. Nothing
+  outside curio ever requested `?w=` at all, so an allowlist would have been rationing an unused dial.
+- **Two path bugs of the same family as the one this plan mocked.** A draft `project_base()` guessed
+  the store from the executable and put it in `target/`; `FICLONE` had its digits transposed, so every
+  "reflink" was silently a full byte copy. Both were caught by checking which path actually ran.
+
+The remaining open questions moved to TODO.md.
 
 ## The stack, and the one place a naive port regresses
 

@@ -84,50 +84,58 @@ trees, and `vendor/*.zip` has the untouched downloads (379 / 361 / 3 files, veri
 
 ## Still open
 
-> **Much of what follows is superseded by [PORT.md](PORT.md)** — the Rust port settled `objects/`,
-> the Python recipes, the render limits, `names/` → `assets/`, caching, and the backup subsystem as
-> design decisions. Items below are kept where the port does not cover them, or where they are the
-> reason the port decided something.
+The Rust port ([PORT.md](PORT.md)) closed most of what used to be here. What is left, honestly sorted.
 
-- **Repoint pirateship at curio.** `training-camp-room.js:11` (`MODEL_ROOT`) and three
-  hardcoded `"../assets/3D/kenney-pirate/"` in `resources.js:115`, `world3d.html:55`,
-  `bottle.html:293`; then delete its local 3 MB copy. Repoint and confirm the scenes load *before*
-  deleting — the local copy has all 72 models and curio serves 16, so anything choosing a
-  model name at runtime rather than as a literal string would 404 and a static trace cannot see it.
+- **Repoint pirateship at curio.** `training-camp-room.js:11` (`MODEL_ROOT`) and three hardcoded
+  `"../assets/3D/kenney-pirate/"` in `resources.js:115`, `world3d.html:55`, `bottle.html:293`; then
+  delete its local 3 MB copy. Repoint and confirm the scenes load *before* deleting — the local copy
+  has all 72 models and curio serves 16, so anything choosing a model name at runtime rather than as a
+  literal string would 404, and a static trace cannot see it.
 
-- **Cache invalidation belongs in `sync`, not in the cache key.** `Derive.cache_name` stamps
-  `s<size>.m<mtime>` into every rendition filename so a stale one is simply never asked for again.
-  It never *deletes*, so `cache/` only grows, and it has no answer for an unpublished name. `sync`
-  already computes exactly the right set — everything reaching `hashed += 1` moved — and already
-  returns `dropped`. Prerequisite: `cache_name` keys on `File.basename`, so two files sharing a
-  basename across collections collide; the stamps are currently masking that. Key on the name
-  relative to `names/` with slashes flattened.
-
-- **bin/curio should absorb the Justfile conveniences.** `find`, `todo`, `verify` and `uncache`
-  exist only as recipes, three of them by shelling out to python and curl against a running server.
-  They are the program's own jobs: `--verify` needs nothing but the store, `--find` and `--todo` read
-  what `--sync` already indexes, and `--uncache` is a delete. The Justfile should stay the layer that
-  sets `CURIO_PORT` / `CURIO_DATA` / `CURIO_PUBLIC` and remembers the flags, not the layer that
-  implements behaviour the binary lacks.
-
-- **Writes need a credential before they can come from anywhere but localhost.** `keep`, `trash`,
-  `unpublish` and `sync` are unauthenticated, which is why the bind defaults to `127.0.0.1` and the
-  README's deploy recipe forwards reads only. That is a routing decision standing in for a feature.
-  A shared token in a header checked by one `before_all` on the POST routes would be enough, and
+- **Writes still have no credential.** `keep`, `trash`, `unpublish` and `sync` now require a loopback
+  `Host` and a same-origin `Origin`, which closes DNS rebinding and the form-POST CSRF. But that is a
+  locality check, not authentication: any local process, and anything inside the reverse proxy, can
+  still drive them. A shared token in a header checked by the same middleware would be enough, and
   would let the console be reachable without a tunnel.
+
+- **Backup retention.** `backup/history/` grows with editing, and an archived version starts costing
+  real bytes once its extent stops being shared. Keep everything, keep N stamps, or thin to one per
+  day after ninety? "Keep everything" is honest while edits are rare and trivial to change later. Note
+  that this is only safe *because* `trash/` is separate: nothing in history was put there on purpose.
+
+- **Gamma-correct resizing.** Scaling happens in gamma-encoded sRGB, which is technically wrong and
+  slightly darkens high-contrast detail. ImageMagick did the same, so this is parity rather than a
+  regression. Linearising first would be *better than the park has ever had* — but renditions would
+  visibly differ from the current ones, so it is a deliberate change, not a fix.
 
 - **The intake workflow scatters, and nothing records where anything went.** Art arrives from
   @mjanime in the toplevel `intake/` (not `data/intake/`, so the console never sees it), grouped by
-  subject with a README. Naming, rejecting and routing are then all done by hand, and a file can end
-  up in `data/names/`, in a game repo that vendors its own art (`bloom-static`, some `wcfranks`
-  arcade games), or nowhere. Nothing writes down which — the dispositions in `notes/` had to be
-  reconstructed by hashing bytes weeks later, and one pairing could not be recovered at all because
-  the originals had left `intake/` and there was nothing to hash against.
-    Two cheap parts of a fix, before any larger design: have the keep path work on the toplevel
-  `intake/` too, so routing into curio stops being a manual copy that leaves its source behind; and
-  record the delivered name alongside the published one, so the mapping is a fact rather than an
-  inference. `notes/README.md` describes the workflow as it actually is, which is the place to start.
+  subject with a README. Naming, rejecting and routing are all done by hand, and a file can end up in
+  `assets/`, in a game repo that vendors its own art (`bloom-static`, some `wcfranks` arcade games), or
+  nowhere. Nothing writes down which — the dispositions in `notes/` had to be reconstructed by hashing
+  bytes weeks later, and one pairing could not be recovered at all.
+    Two cheap parts before any larger design: have `keep` work on the toplevel `intake/` too, so
+  routing into curio stops being a manual copy that leaves its source behind; and record the delivered
+  name alongside the published one, so the mapping is a fact rather than an inference.
 
 - **intake/ can't take a directory.** Dropping a folder there lists its files individually. `watch/`
   handles collections properly; the console's keep/bin path does not. Needs *keep as collection* and
   *keep contents individually* as separate buttons, and a thumbnail rule for a folder.
+
+- **`data/objects/` is 1.6 GB of nothing.** Nothing reads it since the port; `backup/` replaced it.
+  `hold/` (8.4 MB, four honeycomb backdrops also in bloom-static) is likewise unknown to the code.
+  `vendor/` (46 MB of untouched upstream zips) is worth keeping. Reclaimable whenever, no hurry at
+  533 G free.
+
+## Settled by the port, kept for the reasoning
+
+- **Cache invalidation was going to move out of the cache key into `sync`.** It did not, and the
+  reasons for wanting it are gone: the key still carries the source's size and mtime, but `cache/` now
+  has a size ceiling with oldest-first eviction, so it no longer grows without bound — which was the
+  real complaint. The basename collision that made it urgent is fixed by keying on the name relative
+  to `assets/`. Worth knowing the runtime stat is still there, and is now a deliberate choice rather
+  than an unexamined one.
+
+- **`bin/curio` should absorb the Justfile conveniences.** Done: `--verify --find --todo --uncache
+  --dedup --rename`. No Python anywhere, which also deleted `just find`'s shell-into-python injection
+  rather than fixing it.
