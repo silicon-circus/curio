@@ -5,23 +5,16 @@ name**, so no repo holds a copy of anything.
 
     just run                             # http://localhost:19463
 
-(`just run` builds `--release` and exports the paths. A plain `shards build` quietly writes a debug
-binary to the same path, which is easy to leave behind by accident.)
-
 ## Requirements
 
 | | |
 |---|---|
-| **Crystal** ≥ 1.19.1 | `shards install` pulls Kemal, the only dependency |
-| **ImageMagick 7** — `magick` | every resize and every format conversion shells out to it |
-| **A reflink filesystem** | XFS, btrfs, bcachefs, APFS, OpenZFS 2.2+ — see below. ext4 works, it just stops being free |
-| `just` *(optional)* | a convenience layer over `bin/curio`; nothing requires it |
+| **Rust** stable (1.90+) | `cargo build --release`; the only build step |
+| `just` *(optional)* | remembers flags and sets three environment variables; nothing requires it |
 
-Nothing checks for ImageMagick. The server starts without it, serves every master happily, and fails
-only on the first request that needs a conversion — so confirm it before wondering why
-`/a/foo.webp` is a 500:
-
-    magick -version
+That is the whole list. Decoding, scaling and encoding happen in process — there is no ImageMagick
+to install and no subprocess to fail. A **reflink filesystem** (XFS, btrfs, bcachefs, APFS,
+OpenZFS 2.2+) makes the backup mirror free rather than merely correct; see below.
 
 ## The workflow
 
@@ -31,30 +24,40 @@ only on the first request that needs a conversion — so confirm it before wonde
    served, then run `just watch`. It prints exactly what it intends to do and asks before doing any
    of it — a folder you are still arranging looks identical to one you have finished arranging, and
    only you know which.
-4. Reference it: `/a/boardwalk.cattacula.night.real.webp`, `?w=640` for a resize.
+4. Reference it: `/a/boardwalk.cattacula.night.real.webp`, `?w=640` for a resize — never larger than the master.
 
-Need a touch-up? Open the file in `data/names/` and edit it. Refresh. Done — same name, same URL,
+Need a touch-up? Open the file in `data/assets/` and edit it. Refresh. Done — same name, same URL,
 nothing to update, and the version you replaced is kept.
 
 ## The folders
 
 | | |
 |---|---|
-| `watch/` | drop it with the name you want; filed automatically |
+| `watch/` | drop it in named; filed after showing you the plan |
 | `intake/` | not looked at yet — keep or bin |
-| `names/` | **your working set.** The filename is the URL. Edit these freely |
-| `objects/` | the archive: every version ever synced, by hash, immutable |
-| `cache/` | renditions. Disposable — `rm -rf` and it rebuilds |
-| `trash/` | what you threw away, in case you didn't mean it |
+| `assets/` | **your working set.** The filename is the URL. Edit these freely |
+| `backup/` | `current/` mirrors `assets/`; `history/<stamp>/` holds what was replaced. Read-only |
+| `cache/` | renditions. Disposable, and size-capped |
+| `trash/` | what **you** threw away |
 
-## Why names are reflink copies and not hardlinks
+`trash/` and `backup/history/` are not two attics. They differ by who decided and why: `trash/` is
+yours — *"I probably don't need this, but I'm not deleting it yet"* — and is never pruned on a
+schedule. `history/` is the system keeping bytes nobody asked it to keep, which is exactly why it
+*can* be thinned. Mixing them would mean a retention policy that quietly deletes things you set
+aside on purpose.
+
+There is no `objects/`. It saved 35 files of deduplication out of 1051, held 749 objects that no name
+pointed at, and kept no record of what any of them used to be called — so "version history, and it's
+free" was retention without recall.
+
+## Why the backup mirror is reflinks and not hardlinks
 
 This is the part that makes editing safe, and it took a measurement to get right.
 
-A hardlink is the same inode under two names. So an in-place edit — GIMP overwriting,
-`magick foo.png foo.png`, anything that opens for writing rather than writing-and-renaming — reaches
-*through* the name and rewrites the object. The store then holds bytes that don't hash to their own
-filename, and every other name pointing at that object has silently changed too:
+A hardlink is the same inode under two names. So an in-place edit — GIMP overwriting, anything that
+opens for writing rather than writing-and-renaming — reaches *through* the name and rewrites the
+other copy. The backup would then hold the very bytes it exists to preserve you *from*, and any
+asset aliased under a second name would have silently changed too:
 
 ```
 start              obj=original bytes    name=original bytes     same inode
@@ -63,7 +66,8 @@ write + rename     obj=original bytes    name=EDITED via rename  broken link  �
 ```
 
 A **reflink copy** is a separate inode sharing the same extents. Editing it diverges only the blocks
-you touched, and `objects/` can't be reached from `names/` at all.
+you touched, so `backup/` cannot be reached through `assets/` at all. The same reasoning is why
+`curio --dedup` reflinks byte-identical aliases rather than hardlinking them.
 
 On a filesystem with reflink this costs nothing:
 
@@ -76,25 +80,36 @@ reflink copy of it          0.0 MB      shared extents
 Supported by **XFS** (reflink=1, the mkfs default since 2018), **btrfs**, **bcachefs**, **OCFS2**,
 **OpenZFS 2.2+**, **APFS**, **ReFS**, and **NFS 4.2**. *Not* by **ext4**, where `cp` falls back to a
 real copy — still correct, just no longer free. Reflinks can't cross a mount, so `data/` must live
-on one filesystem.
+on one filesystem. Measured here: a read-only mirror of 1051 assets, 1.4 GB apparent, cost **804 KB
+and 1.4 seconds**.
 
 Note that `du` over-reports as a result: it counts shared extents once per file, so `data/` reads as
 3.0 GB when the disk cost is 1.6 GB. Trust `df`.
 
 ## Rules the server keeps
 
-**Objects are never written except by sync, and never deleted.** Touching up a picture doesn't
-destroy what it replaced — the old bytes keep their hash and simply stop having a name. That's
-version history, and it's free.
+**Every replaced version is kept, under the name it had.** `sync` files it into
+`backup/history/<stamp>/` before refreshing the mirror. That is only possible because the mirror
+captured it at the *previous* sync — by the time sync notices an edit, the old bytes are already
+overwritten.
 
-**watch/ never overwrites.** A file whose name is already served is left exactly where it is and
-reported in the console — not moved, not renamed, not merged, and not silently dropped even when the
-bytes are identical. "I moved it to watch/ and it vanished" is indistinguishable from "it worked",
-and those are very different things to have happened.
+**watch/ never overwrites.** A name already being served is left exactly where it is and reported —
+not moved, not renamed, not merged, and not silently dropped even when the bytes are identical. "I
+moved it to watch/ and it vanished" is indistinguishable from "it worked", and those are very
+different things to have happened. Every destination is re-tested at the moment of writing, not only
+when the plan was printed.
 
-**Cache keys carry size and mtime**, not just the name. Edit a master and its renditions invalidate
-themselves on the next request. A stat, not a hash — this runs on every request, and hashing a 3 MB
-master to serve a 14 kB thumbnail is not a trade.
+**Renames are noticed, and guessed at never.** A name gone with its exact bytes under a new name is a
+rename, recorded in `backup/history/<stamp>/.renames.tsv`. A rename *and* an edit at once cannot be
+linked by the bytes, so sync reports the pair and asks — the same shape `watch` uses, for the same
+reason.
+
+**Writes come from this machine only.** curio binds `127.0.0.1` and the four mutating routes require
+a loopback `Host` and a same-origin `Origin`. CORS is not a control: a form POST needs no preflight.
+
+**Cache keys carry the source's size and mtime.** Edit a master and its renditions are never asked
+for again. A stat, not a hash — with one known blind spot: an edit that changes no byte count inside
+the same second is invisible to it. `curio --verify` is what catches that.
 
 ## Asking for a format that isn't on disk
 
@@ -117,6 +132,18 @@ plenty. Encoding webp from a jpg is a *second* lossy pass over bytes that are al
 the encoder cannot tell inherited artifacts from detail, so it gets more room: 90. Same-format
 resizing keeps the old 88. `?q=` overrides all three.
 
+**Never larger than the master.** The format rule is "downward only"; so is the size rule — curio does
+not fabricate pixels that were never there. `?w=8192` on a 1024px picture is the picture. Widths are
+quantised up to a multiple of 64 rather than allowlisted, so a caller asking for 641 gets 704 real
+pixels instead of a 404 and `srcset` keeps working. Quality applies only to lossy targets: on a PNG
+the number is a zlib level, and a low one makes the file *bigger*.
+
+Scaling uses Mitchell rather than Lanczos3, and the reason is the encoder rather than the pixels —
+sharpening a downscale is ringing, and ringing is detail a lossy codec must spend bytes on. Measured
+against ImageMagick over sixteen real masters at 320px: Lanczos3 ran +19% median, Mitchell −2.6%.
+Full-size conversion with no resize is byte-identical to ImageMagick, because at that point both are
+just libwebp at the same quality.
+
 Both dials compose: `?w=640` on a derived format resizes and converts in one pass, one cache entry.
 
 **Asking what is servable is one request.** A derived rendition is never an index entry — only the
@@ -136,37 +163,29 @@ and `.webp` appear once, as the files they are.
 
 ## Commands
 
-`bin/curio` is the whole program. The Justfile is a convenience layer over it, and it exports
-`CURIO_PORT`, `CURIO_DATA` and `CURIO_PUBLIC` for every recipe that starts the binary — so a dev run
-never depends on the path baked into it.
+`curio` is the whole program. The Justfile remembers flags and exports `CURIO_PORT`, `CURIO_DATA` and
+`CURIO_PUBLIC`; it implements nothing.
 
-    bin/curio              serve
-    bin/curio --watch      file what is in watch/, after printing the plan and asking
-    bin/curio --sync       hash names/, file anything new into objects/
-    bin/curio --migrate    hardlink an older layout in (non-destructive)
+    curio                     serve
+    curio --sync [--dry-run] [--yes]
+                              file edits away, keep what they replaced, ask about a rename
+    curio --watch [--yes]     file what is in watch/, after showing the plan
+    curio --verify            re-hash assets/ and check it against the manifest
+    curio --find TERMS        search what will be served, derivations included
+    curio --todo              what waits in intake/, and what watch/ is holding
+    curio --uncache           throw away every rendition
+    curio --dedup [--yes]     share extents between byte-identical assets
+    curio --rename OLD NEW    state a rename so the history link survives
 
     CURIO_PORT    19463
     CURIO_BIND    127.0.0.1    0.0.0.0 to expose it — read Deploying first
-    CURIO_DATA    ../data      resolved against the SOURCE DIR AT COMPILE TIME
-    CURIO_PUBLIC  ../public    likewise
+    CURIO_DATA    ./data       relative to the working directory, NOT to the binary
+    CURIO_PUBLIC  ./public
+    CURIO_RENDER_JOBS          concurrent renders (default: half the cores, max 4)
+    CURIO_CACHE_MAX_MB         cache ceiling (default 2048)
 
-And through `just`, which on its own lists every recipe:
-
-    just dev             run from source; an edit to src/ is live on restart
-    just run             build --release, then serve
-    just check           does it compile — no binary, fastest feedback
-    just watch [yes]     the plan, then ask. `just watch yes` skips the asking
-    just sync            file edits in names/ away into objects/
-    just verify          re-read every object, check it still hashes to its own name
-    just find TERMS      search the names — `just find cattacula night`
-    just todo            what waits in intake/, and what watch/ is holding
-    just du              what the store actually costs (du lies; df does not)
-    just uncache         throw away every rendition
-    just glb-flatten     rebase a kit's .glb onto flat tagged names
-    just ping / open     health, and the console in a browser
-
-Anything `just` can do that `bin/curio` cannot is a gap in the binary rather than a feature of the
-Justfile. The current list is `find`, `todo`, `verify` and `uncache`.
+`just` wraps each of these — `just sync`, `just watch yes`, `just find cattacula night`, `just verify`,
+`just todo`, `just uncache`, `just dedup`, `just du`, `just ping`, `just open`.
 
 ## The HTTP surface
 
@@ -190,32 +209,27 @@ routes deliberately do not, so a page in another tab cannot drive them.
 
 ## Deploying
 
-Two things will bite before anything else does.
-
-**There is no authentication, and four routes change the store.** That is the right shape for a tool
-serving one machine's browser and the wrong shape for anything else — so it binds `127.0.0.1`, and
-exposing it is something you have to type. `CURIO_BIND=0.0.0.0` belongs only behind something that
-terminates the public side and forwards **reads only**:
+**There is no authentication, and four routes change the store.** Right for a tool serving one
+machine's browser, wrong for anything else — so it binds `127.0.0.1` and exposing it is something you
+type. `CURIO_BIND=0.0.0.0` belongs only behind something that terminates the public side and forwards
+**reads only**:
 
     location /a/     { proxy_pass http://127.0.0.1:19463; }
     location /health { proxy_pass http://127.0.0.1:19463; }
     # everything else — / and /api/ and /intake/ — is simply not published
 
-That is the whole security model, and it is a routing decision rather than a feature: the mutating
+That is the whole security model, and it is a routing decision rather than a feature. The mutating
 surface is never reachable, and the console is reached over SSH or a tunnel instead of being
-published. Before curio can accept a write from anywhere but localhost it needs a credential, and it
-does not have one yet.
+published.
 
-**The binary is not relocatable.** `CURIO_DATA` and `CURIO_PUBLIC` default to `../data` and
-`../public` resolved against the source directory *at compile time* — Crystal bakes `__DIR__` in. A
-binary built in `/home/you/curio` and copied to a server therefore goes looking for
-`/home/you/curio/data`, finds nothing, and serves an empty store while reporting `"ok": true`. The
-counts in `/health` are the tell. Build in place, or set both:
+**Set `CURIO_DATA`.** It defaults to `./data` relative to the *working directory*, so a service
+started from elsewhere will not find the store. It says what it resolved and how many assets it found
+on the first two lines of its log, and an empty store is always that message rather than a mystery.
 
     CURIO_BIND=0.0.0.0 \
     CURIO_DATA=/srv/curio/data \
     CURIO_PUBLIC=/srv/curio/public \
-    bin/curio
+    curio
 
 `data/` has to live on one filesystem, because reflinks cannot cross a mount.
 
