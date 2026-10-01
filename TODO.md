@@ -127,6 +127,18 @@ The Rust port ([PORT.md](PORT.md)) closed most of what used to be here. What is 
   `vendor/` (46 MB of untouched upstream zips) is worth keeping. Reclaimable whenever, no hurry at
   533 G free.
 
+- **Multiple archives — deliberately deferred.** curio is Silicon Circus's asset server, with one
+  store at `data/`. Supporting several archives was worked through on 2026-09-30 and every shape has
+  a real cost: one service per archive means a systemd unit for each, which is wrong for something
+  system-wide; one service for many means a config file listing them and namespaced URLs
+  (`/a/<archive>/<name>`), plus `ProtectHome` keeping a system service out of archives in home
+  directories. None of that is worth paying for one archive and one consumer.
+    If a second archive becomes real, the config-file shape is the one to build: a single service
+  reading `/etc/curio/curio.toml`, URLs always namespaced (a bare default is ambiguous with
+  collections — `/a/kit/Textures/colormap.png` could be an archive or a path), the CLI finding its
+  archive by which configured path contains the current directory, and cache and backup keyed by
+  archive name. Design it against the real second archive, not this sketch.
+
 ## Settled by the port, kept for the reasoning
 
 - **Cache invalidation was going to move out of the cache key into `sync`.** It did not, and the
