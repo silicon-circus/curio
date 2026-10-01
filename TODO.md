@@ -139,6 +139,12 @@ The Rust port ([PORT.md](PORT.md)) closed most of what used to be here. What is 
   archive by which configured path contains the current directory, and cache and backup keyed by
   archive name. Design it against the real second archive, not this sketch.
 
+- **Hash in parallel during sync.** `sync::scan` hashes changed files one at a time. Hashing across
+  cores is roughly 14× for SHA-256 on this machine (2.24 → 31.29 GB/s) — a far bigger lever than the
+  choice of algorithm. Not pressing: a full cold sync of the store is 1.4 s, and a normal one rehashes
+  only the handful of files whose size or mtime moved. Worth doing before a store grows large, or
+  before the first full upload to R2.
+
 - **An R2 backend — the shape worked out, not built.** Discussed 2026-10-01. Object storage removes
   the reason to slim the store at all: no egress fees and pennies a month at this size, so "1.4 GB on
   a box with 3 GB free" stops being a question and everything is kept, always.
@@ -147,6 +153,20 @@ The Rust port ([PORT.md](PORT.md)) closed most of what used to be here. What is 
   object moves), and a hash key's bytes can never change so it can be cached forever — which also
   resolves the review's finding that a year-long `max-age` contradicts in-place editing, since only
   the name→hash lookup has to be short-lived.
+
+  *SHA-256, decided over BLAKE3.* Measured on this machine (Core Ultra 7 155H, SHA-NI and AVX2, no
+  AVX-512) with the crates curio uses, on its real workload of ~1.4 MB files:
+
+                             one core     one file per core
+      sha256 (SHA-NI)       2.24 GB/s        31.29 GB/s
+      blake3 (AVX2)         4.67 GB/s        33.66 GB/s
+
+  BLAKE3 is ~2× faster on one core, but curio hashes many SEPARATE files, which parallelise across
+  cores for any hash — and there the gap is ~7%, because every core is busy either way. A headline
+  "34 GB/s against 2 GB/s" compares BLAKE3 on all cores to SHA-256 on one; do not reopen this on that
+  basis. SHA-256 wins on ubiquity (`sha256sum`, every standard library, any machine can verify a key)
+  and on possibly matching an upload's own integrity checksum. It is also what the manifest already
+  uses, and the choice is free only until the first object is uploaded.
 
   *Names come from a LOG, not a manifest.* Sync appends what happened — add, edit, rename, remove,
   each with its hash — rather than rewriting a snapshot. A rename is then recorded as a rename instead
