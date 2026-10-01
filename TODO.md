@@ -139,6 +139,47 @@ The Rust port ([PORT.md](PORT.md)) closed most of what used to be here. What is 
   archive by which configured path contains the current directory, and cache and backup keyed by
   archive name. Design it against the real second archive, not this sketch.
 
+- **An R2 backend — the shape worked out, not built.** Discussed 2026-10-01. Object storage removes
+  the reason to slim the store at all: no egress fees and pennies a month at this size, so "1.4 GB on
+  a box with 3 GB free" stops being a question and everything is kept, always.
+
+  *Objects keyed by content hash.* No name collisions, dedup for free, renames cost nothing (no
+  object moves), and a hash key's bytes can never change so it can be cached forever — which also
+  resolves the review's finding that a year-long `max-age` contradicts in-place editing, since only
+  the name→hash lookup has to be short-lived.
+
+  *Names come from a LOG, not a manifest.* Sync appends what happened — add, edit, rename, remove,
+  each with its hash — rather than rewriting a snapshot. A rename is then recorded as a rename instead
+  of being inferred from two snapshots, which is the ambiguity sync already struggles with and the
+  reason `.renames.tsv` exists. R2 objects are immutable, so the log is a series of small segments,
+  one per sync, each written once. Periodic checkpoints bound replay: current state is the latest
+  snapshot plus the segments after it. The manifest becomes a derived view, rebuildable at will.
+
+  *The failure to design against is `objects/`.* 749 hash-named objects and no record of what any had
+  been called — retention without recall. So the log and its checkpoints live in the bucket alongside
+  the objects, and each object also carries the name it was uploaded under as R2 custom metadata, so
+  the names can be rebuilt by listing the bucket even if every log segment were lost. (Metadata holds
+  *a* name an object once had — dedup means one object can serve several, and immutable metadata
+  cannot follow a rename — so it is recovery, not a record.)
+
+  *Search moves to the manifest.* R2 lists by PREFIX only — no substring, no suffix. Namespaces map
+  straight onto prefixes, which makes segment order a real decision: `boardwalk.` and
+  `boardwalk.cattacula.` list cheaply, "everything that is `night`" cannot. Substring search stays
+  curio's job, against its own manifest, which is what `--find` already does.
+
+  *Still open:*
+  - Namespaces become load-bearing, so names must be reliably prefixed. 102 of 1052 are not today,
+    and renaming them breaks consumer refs, so it is coordinated work, not a sweep.
+  - Edit-in-place stops being the model: an object in R2 cannot be opened in GIMP. `assets/` becomes a
+    local working copy and curio's job shifts toward syncing it up.
+  - The reflink backup does not transfer. The log arguably replaces it — every version is an
+    immutable object and the log says what each was called — but check whether R2 offers object
+    versioning before relying on either.
+  - Where derivation runs. If browsers fetch from R2 directly, png→webp on demand has nowhere to run:
+    bake at upload time, or put a Worker or Cloudflare's image transformation in front. The fork
+    underneath it: does curio remain a server that reads from R2, or become the authoring-and-sync
+    tool while Cloudflare serves? Those are quite different programs.
+
 ## Settled by the port, kept for the reasoning
 
 - **Cache invalidation was going to move out of the cache key into `sync`.** It did not, and the
