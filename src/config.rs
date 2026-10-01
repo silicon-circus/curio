@@ -76,11 +76,37 @@ impl Config {
     /// Read from the environment, falling back to paths relative to `base` (the directory holding
     /// the project, not the binary — a compiled-in path is how the Crystal ended up unable to be
     /// moved without being rebuilt).
+    /// FIND THE STORE THE WAY GIT FINDS A REPOSITORY.
+    ///
+    /// Walk up from `start` until a directory looks like a store — one holding `assets/`, or a
+    /// `manifest.tsv` from a store that has been synced. That is what makes an installed `curio` on
+    /// the PATH usable: without it the data root is `./data` relative to wherever you happen to be
+    /// standing, so running the command from anywhere but the project directory silently finds
+    /// nothing. `CURIO_DATA` still wins, and still has to be set for a service.
+    pub fn discover(start: &Path) -> Option<PathBuf> {
+        let mut dir = start.canonicalize().ok()?;
+        loop {
+            if dir.join("assets").is_dir() || dir.join("manifest.tsv").is_file() {
+                return Some(dir);
+            }
+            // the conventional layout, where the store is a `data/` inside the project
+            let nested = dir.join("data");
+            if nested.join("assets").is_dir() || nested.join("manifest.tsv").is_file() {
+                return Some(nested);
+            }
+            if !dir.pop() {
+                return None;
+            }
+        }
+    }
+
     pub fn from_env(base: &Path) -> Self {
         let raw_backup = std::env::var("CURIO_BACKUP").unwrap_or_default();
         let backup_off = matches!(raw_backup.as_str(), "none" | "off");
         Config {
-            data_root: env_path("CURIO_DATA").unwrap_or_else(|| base.join("data")),
+            data_root: env_path("CURIO_DATA")
+                .or_else(|| Self::discover(base))
+                .unwrap_or_else(|| base.join("data")),
             public: env_path("CURIO_PUBLIC").unwrap_or_else(|| base.join("public")),
             port: std::env::var("CURIO_PORT").ok().and_then(|s| s.parse().ok()).unwrap_or(DEFAULT_PORT),
             bind: std::env::var("CURIO_BIND").unwrap_or_else(|_| DEFAULT_BIND.to_string()),
@@ -355,6 +381,59 @@ mod layout_tests {
         for d in [cfg.intake(), cfg.watch(), cfg.trash()] {
             assert!(!d.exists(), "{} should not have been created", d.display());
         }
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod discovery_tests {
+    use super::*;
+
+    fn tree(name: &str) -> PathBuf {
+        let p = std::env::temp_dir().join(format!("curio-disc-{}-{}", name, std::process::id()));
+        let _ = std::fs::remove_dir_all(&p);
+        p
+    }
+
+    #[test]
+    fn finds_a_store_from_a_subdirectory() {
+        let root = tree("sub");
+        std::fs::create_dir_all(root.join("project/assets")).unwrap();
+        std::fs::create_dir_all(root.join("project/deep/deeper")).unwrap();
+        assert_eq!(Config::discover(&root.join("project/deep/deeper")),
+            Some(root.join("project").canonicalize().unwrap()));
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn finds_the_conventional_data_subdirectory() {
+        // the layout this repo uses: the store is a data/ inside the project
+        let root = tree("nested");
+        std::fs::create_dir_all(root.join("proj/data/assets")).unwrap();
+        std::fs::create_dir_all(root.join("proj/src")).unwrap();
+        assert_eq!(Config::discover(&root.join("proj/src")),
+            Some(root.join("proj/data").canonicalize().unwrap()));
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn a_synced_store_is_recognised_by_its_manifest() {
+        let root = tree("manifest");
+        std::fs::create_dir_all(root.join("proj")).unwrap();
+        std::fs::write(root.join("proj/manifest.tsv"), "").unwrap();
+        assert_eq!(Config::discover(&root.join("proj")),
+            Some(root.join("proj").canonicalize().unwrap()));
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn nowhere_near_a_store_finds_nothing() {
+        let root = tree("none");
+        std::fs::create_dir_all(root.join("empty/deeper")).unwrap();
+        // /tmp has no assets/ above it, so this must not invent one
+        let found = Config::discover(&root.join("empty/deeper"));
+        assert!(found.is_none() || !found.unwrap().starts_with(&root),
+            "invented a store where there is none");
         std::fs::remove_dir_all(&root).unwrap();
     }
 }

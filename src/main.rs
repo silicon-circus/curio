@@ -40,13 +40,26 @@ pub struct AppState {
 #[tokio::main]
 async fn main() -> Result<()> {
     let cfg = Config::from_env(&project_base());
-    cfg.ensure_dirs()?;
-
     let args: Vec<String> = std::env::args().skip(1).collect();
-    if !cfg.assets().is_dir() {
-        eprintln!("curio: no store at {} — set CURIO_DATA, or run from the project directory",
-            cfg.data_root.display());
+
+    // NEVER CREATE A STORE BY ACCIDENT. Now that curio can be installed on the PATH, it gets run
+    // from anywhere — and ensure_dirs() on every invocation meant `curio --requested` in /tmp
+    // created /tmp/data/{assets,intake,watch,trash} and an XDG cache directory keyed to it. A tool
+    // that litters a store wherever you happen to stand is worse than one that refuses.
+    //
+    // So a store is created only where you SAID it should be. Discovery is for finding an existing
+    // one; CURIO_DATA is how you make a new one.
+    let told_where = std::env::var_os("CURIO_DATA").is_some();
+    let exists = cfg.assets().is_dir() || cfg.manifest_path().is_file();
+    if !told_where && !exists && !args.iter().any(|a| a == "--help" || a == "-h") {
+        eprintln!("curio: no store here.\n\
+            \n  Run it from inside a project — it walks up looking for one, the way git does —\n\
+            \n  or say where:   CURIO_DATA=/path/to/store curio {}\n\
+            \n  Setting CURIO_DATA is also how a new store gets created.",
+            args.join(" "));
+        std::process::exit(2);
     }
+    cfg.ensure_dirs()?;
     let flag = |f: &str| args.iter().any(|a| a == f);
     let value_after = |f: &str| args.iter().position(|a| a == f).and_then(|i| args.get(i + 1)).cloned();
     if flag("--sync") {

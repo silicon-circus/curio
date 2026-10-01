@@ -4,6 +4,11 @@ The Silicon Circus asset server. Everything the park draws, plays or loads is se
 name**, so no repo holds a copy of anything.
 
     just run                             # http://localhost:19463
+    just install                         # and then `curio` works from anywhere
+
+Once installed, `curio` finds its store by walking up from the current directory until it sees one —
+the way `git` finds a repository — so you can run it from anywhere inside a project. `CURIO_DATA`
+overrides that, and a service must set it explicitly.
 
 ## Requirements
 

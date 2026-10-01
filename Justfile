@@ -43,6 +43,19 @@ build:
 run: build
     {{ env }} {{ curio }}
 
+# Symlinked rather than copied, so a rebuild is picked up without reinstalling.
+# Once this is on the PATH, `curio` finds its store by walking up from wherever you
+# are, the way git finds a repository -- which is what makes an installed copy worth
+# having. Without that it would default to ./data relative to the current directory
+# and silently find nothing from anywhere but the project root.
+[doc('Put curio on your PATH as ~/.local/bin/curio')]
+install: build
+    @mkdir -p ~/.local/bin
+    @ln -sf "{{ justfile_directory() }}/target/release/curio" ~/.local/bin/curio
+    @echo "  ~/.local/bin/curio -> target/release/curio"
+    @command -v curio >/dev/null && echo "  on your PATH: $(curio --help | head -1)" \
+      || echo "  NOT on your PATH -- add ~/.local/bin to it"
+
 # ── the store ───────────────────────────────────────────────────────────────
 
 # Prints what it intends to do with everything in watch/ -- a top-level directory
@@ -110,6 +123,23 @@ find *terms: build
 [doc('What is waiting in intake/, and what watch/ is holding')]
 todo: build
     @{{ env }} {{ curio }} --todo
+
+# ── what is actually used ───────────────────────────────────────────────────
+
+# The procedure: forget, exercise the consumer, then read it. `requested` also lists
+# anything asked for and NOT served, which is a broken reference somewhere and the one
+# thing no amount of reading the consumer's source will tell you.
+[doc('Clear the request table before a fresh walkthrough')]
+forget: build
+    @{{ env }} {{ curio }} --forget-requests
+
+[doc('Every name ever asked for, and what was refused')]
+requested: build
+    @{{ env }} {{ curio }} --requested
+
+[doc('Stored names nobody has asked for, largest first')]
+unrequested: build
+    @{{ env }} {{ curio }} --unrequested
 
 [doc('Open the console')]
 open:
