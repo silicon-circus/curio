@@ -186,7 +186,8 @@ this ever fetched" rather than "was it fetched ninety-four times". `data/request
 
     curio --forget-requests     # clear it — works on a running server
     # ...then exercise the consumer: every venue, every page, every setting
-    curio --requested           # what was asked for, what it was derived from, what was refused
+    curio --requested           # what it fetched, derived from what, and what it asked for in vain
+    # that becomes the consumer's declared list; then leave recording on to check it
     curio --unrequested         # stored names nobody asked for, largest first
 
 Three things make it more useful than it sounds:
@@ -203,10 +204,21 @@ surfaces a broken reference. A page asking for `deck.webp` when the store holds
 webp you would bake and one made of the png masters that feed them — 14 MB against 950 MB, on this
 store.
 
-It records what was **exercised**, so it is one of two inputs rather than the answer. Union it with a
-static scan of the consumer's own source: seasonal art and a setting nobody toggled will not appear
-here, and a name assembled at runtime will not appear there. Where the two disagree is exactly what
-is worth looking at.
+It records what was **exercised**, which is its one limit: art behind a season or a setting nobody
+toggled does not appear.
+
+Do not patch that by grepping the consumer's source and merging the two lists. A scan's misses are
+what this fixes, but a scan's FALSE POSITIVES would go straight into your declaration — grepping
+boardwalk produced `SET.wav` and `day.real.webp`, which are fragments rather than assets, and two
+attempts at it disagreed with each other by 21 names. Merging an unreliable list into a reliable one
+gives you an unreliable one.
+
+The limit is closed by the consumer DECLARING what it needs, not by curio guessing harder. Once every
+reference comes from one list the consumer owns, that list is the truth, and this table stops being a
+way to discover it and becomes a way to check it: anything requested that is not declared is a bug in
+the consumer, and `--unrequested` is what you prune by. Reading the source is still useful, but for
+surprises — "I expected the snow art and saw none; did I not toggle it, or is it dead?" — which is a
+judgement, not a merge.
 
 ## Commands
 
