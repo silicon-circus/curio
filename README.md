@@ -19,7 +19,7 @@ tagged `v0.3.2-server`.*
 | | |
 |---|---|
 | **Rust** stable (1.90+) | `cargo build --release`; the only build step |
-| a DataDungeon store | reachable over its API: `dd-serve` beside a database, or an app that mounts `DataDungeon::API` |
+| a DataDungeon store, **0.9 or later** | reachable over its API: `dd-serve` beside a database, or an app that mounts `DataDungeon::API`. curio uses 0.9's search, links and paging |
 | `just` *(optional)* | remembers the commands; nothing requires it |
 
 ## Configuring stores
@@ -95,13 +95,22 @@ or a preview in the detail panel instead of a thumbnail.
 
 ## Reading the console
 
-- **Types** across the top, with counts, come from the store. No type or tag name is written into
-  curio: every store has different ones, and they get renamed.
+- **Search** from the box in the header (or press `/`). Every word must be an asset's type or one of
+  its tag values, in any order, so `cattacula front night`, `boardwalk cattacula` and
+  `cattacula.front.night` all find `prop.cattacula.front.night.real..webp`; `catt*` matches the start
+  of a word. A search starts across every type, and choosing a type then narrows it.
+- **Types** across the top, with counts, come from the store, after **All**. No type or tag name is
+  written into curio: every store has different ones, and they get renamed.
+- **Use** at the top of the filters: what a venue uses (`used by boardwalk`), or what nothing uses,
+  across every type. Who uses an asset is a *link* in DataDungeon, not a tag, because it changes and
+  one asset can have several users; the detail panel lists an asset's links both ways, and in update
+  mode adds them (`used-by` a name, or `#id` for another asset) and removes them.
 - **Filters** on the left are the type's tag names; a registered type's key traits come first, in key
   order. The bar behind each value is its share of the type. Filtering on several tags means all of
-  them.
+  them, and every filter, search and use filter shows as a chip above the grid.
 - **Pages** that each fit one screen, newest first: as many cards as the window holds, so the grid
-  never scrolls. Resizing the window or opening the detail panel reshapes the page and keeps the
+  never scrolls. The total is asked for once per search rather than on every page, because counting
+  reads every match. Resizing the window or opening the detail panel reshapes the page and keeps the
   selected asset in view. The page is in the URL, with the store, type, filters and the open asset,
   so a reload comes back to the same place — but never in update mode.
 - **Page Up / Page Down** turn pages. **← →** step through assets with the detail panel open,
@@ -148,20 +157,20 @@ Everything under `/api/stores/<name>/` is that store's DataDungeon API, passed t
 | `GET` | `/api/stores` | the stores and whether each is writable — never a token |
 | `GET` `POST` `DELETE` | `/api/update` | update mode: status, on (returns the key), off |
 | `GET` | `…/types`, `…/types/:type/tags[/:key]` | types, tag names, a tag's values, with counts |
-| `GET` | `…/assets?type=&tag.<k>=&limit=&offset=` | a page of assets |
-| `GET` | `…/assets/:id`, `…/assets/:id/object` | an asset; its bytes (`?download=1` to save) |
+| `GET` | `…/assets?type=&q=&tag.<k>=&link.<rel>=&unlinked=&limit=&page=&count=1` | a page of assets |
+| `GET` | `…/assets/:id`, `…/assets/:id/object` | an asset with its links; its bytes (`?download=1` to save) |
+| `GET` | `…/assets/:id/links` | what it links to, and what links to it |
 | `GET` | `…/assets/:id/thumb/:file_hash?w=` | a webp thumbnail, width rounded up to a multiple of 64 |
 | `POST` | `…/check` | the store's consistency report |
 | `PATCH` `DELETE` | `…/assets/:id` | edit or delete — update mode |
+| `POST` `DELETE` | `…/assets/:id/links` | link (`{rel, name}` or `{rel, to}`) or unlink (`?rel=&name=`) — update mode |
 | `POST` | `…/types/:type/promote`, `…/vacuum` | update mode |
 
 ## What DataDungeon does not offer yet
 
 These are DataDungeon's to add, and curio will use them when it does:
 
-- **search.** DataDungeon has a semantic index, but no app attaches one yet, so there is nothing to
-  search.
-- **listing across types,** and orders other than newest first.
+- **orders other than newest first.**
 - **range requests** on an object, so a long video or audio clip cannot be seeked until it has
   loaded.
 - **editing a type's registration**, deliberately: apps keep registrations in memory.

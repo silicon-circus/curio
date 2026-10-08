@@ -3,7 +3,7 @@
 //! Reads go straight through to the store with its read token. Writes need three things, checked in
 //! this order, and each refusal says which one was missing:
 //!
-//!   1. the store has a write token in curio's config      otherwise 403
+//!   1. the store has a write token in curio's config        otherwise 403
 //!   2. update mode is on, and this request carries its key otherwise 423
 //!   3. DataDungeon agrees                                   its own answer, passed through
 //!
@@ -178,6 +178,11 @@ pub async fn asset(State(state): St, Path((name, id)): Path<(String, i64)>) -> R
     read(&state, &name, &["assets", &id.to_string()], None).await
 }
 
+/// What an asset links to — `used-by` boardwalk, `derived-from` another asset — and what links to it.
+pub async fn links(State(state): St, Path((name, id)): Path<(String, i64)>) -> Response {
+    read(&state, &name, &["assets", &id.to_string(), "links"], None).await
+}
+
 pub async fn check(State(state): St, Path(name): Path<String>) -> Response {
     match store(&state, &name) {
         Ok(s) => state.dd.relay(s, Access::Read, Method::POST, &["maintenance", "check"], None, None).await,
@@ -332,10 +337,11 @@ async fn write(
     headers: &HeaderMap,
     method: Method,
     segments: &[&str],
+    query: Option<&str>,
     body: Option<Bytes>,
 ) -> Response {
     match may_write(state, name, headers) {
-        Ok(s) => no_store(state.dd.relay(s, Access::Write, method, segments, None, body).await),
+        Ok(s) => no_store(state.dd.relay(s, Access::Write, method, segments, query, body).await),
         Err(e) => e,
     }
 }
@@ -346,11 +352,11 @@ pub async fn update_asset(
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    write(&state, &name, &headers, Method::PATCH, &["assets", &id.to_string()], Some(body)).await
+    write(&state, &name, &headers, Method::PATCH, &["assets", &id.to_string()], None, Some(body)).await
 }
 
 pub async fn delete_asset(State(state): St, Path((name, id)): Path<(String, i64)>, headers: HeaderMap) -> Response {
-    write(&state, &name, &headers, Method::DELETE, &["assets", &id.to_string()], None).await
+    write(&state, &name, &headers, Method::DELETE, &["assets", &id.to_string()], None, None).await
 }
 
 pub async fn promote(
@@ -359,11 +365,31 @@ pub async fn promote(
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    write(&state, &name, &headers, Method::POST, &["types", &ty, "promote"], Some(body)).await
+    write(&state, &name, &headers, Method::POST, &["types", &ty, "promote"], None, Some(body)).await
 }
 
 pub async fn vacuum(State(state): St, Path(name): Path<String>, headers: HeaderMap, body: Bytes) -> Response {
-    write(&state, &name, &headers, Method::POST, &["maintenance", "vacuum"], Some(body)).await
+    write(&state, &name, &headers, Method::POST, &["maintenance", "vacuum"], None, Some(body)).await
+}
+
+/// `{rel, name}` or `{rel, to}`: link this asset to a name (`used-by` boardwalk) or to another asset.
+pub async fn link(
+    State(state): St,
+    Path((name, id)): Path<(String, i64)>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    write(&state, &name, &headers, Method::POST, &["assets", &id.to_string(), "links"], None, Some(body)).await
+}
+
+/// `?rel=&name=` or `?rel=&to=`, passed through as given.
+pub async fn unlink(
+    State(state): St,
+    Path((name, id)): Path<(String, i64)>,
+    RawQuery(q): RawQuery,
+    headers: HeaderMap,
+) -> Response {
+    write(&state, &name, &headers, Method::DELETE, &["assets", &id.to_string(), "links"], q.as_deref(), None).await
 }
 
 fn no_store(mut res: Response) -> Response {

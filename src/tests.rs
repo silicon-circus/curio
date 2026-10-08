@@ -48,6 +48,9 @@ async fn fake_dd(seen: Seen) -> String {
                 ("PATCH", "/assets/1") => json(r#"{"asset":{"id":1},"tags":{}}"#),
                 ("DELETE", "/assets/1") => json(r#"{"deleted":1}"#),
                 ("POST", "/maintenance/check") => json(r#"{"missing_objects":[],"orphan_objects":[]}"#),
+                ("GET", "/assets/1/links") => json(r#"{"from":[],"to":[]}"#),
+                ("POST", "/assets/1/links") => json(r#"{"from":[]}"#),
+                ("DELETE", "/assets/1/links") => json(r#"{"removed":true}"#),
                 _ => (StatusCode::NOT_FOUND, r#"{"error":"No such endpoint"}"#).into_response(),
             }
         }
@@ -179,6 +182,27 @@ async fn a_write_needs_a_write_token_and_the_switch_and_then_carries_the_write_t
     assert_eq!(off.status(), StatusCode::OK);
     let res = r.http.delete(r.url("/api/stores/curated/assets/1")).header("x-curio-update", &key).send().await.unwrap();
     assert_eq!(res.status(), StatusCode::LOCKED, "turning it off ends the key");
+}
+
+#[tokio::test]
+async fn links_are_read_with_the_read_token_and_changed_only_through_the_switch() {
+    let r = Rig::new("links").await;
+    let res = r.http.get(r.url("/api/stores/curated/assets/1/links")).send().await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let add = || r.http.post(r.url("/api/stores/curated/assets/1/links")).body(r#"{"rel":"used-by","name":"boardwalk"}"#);
+    assert_eq!(add().send().await.unwrap().status(), StatusCode::LOCKED);
+    let key = r.unlock().await;
+    assert_eq!(add().header("x-curio-update", &key).send().await.unwrap().status(), StatusCode::OK);
+    let res = r.http.delete(r.url("/api/stores/curated/assets/1/links?rel=used-by&name=boardwalk"))
+        .header("x-curio-update", &key).send().await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let read = Some("READ".to_string());
+    let write = Some("WRITE".to_string());
+    assert_eq!(r.tokens_seen(), vec![
+        (Method::GET, "/assets/1/links".to_string(), read),
+        (Method::POST, "/assets/1/links".to_string(), write.clone()),
+        (Method::DELETE, "/assets/1/links?rel=used-by&name=boardwalk".to_string(), write),
+    ], "an unlink's query reaches the store as written");
 }
 
 #[tokio::test]

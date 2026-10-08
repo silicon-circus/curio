@@ -72,6 +72,10 @@ header {
   font: 600 15px var(--display); background: var(--board); border: 1px solid var(--rule);
   border-radius: 6px; padding: 5px 8px;
 }
+.search input {
+  font: 13px var(--mono); width: 240px; padding: 6px 12px; border: 1px solid var(--rule);
+  border-radius: 999px; background: var(--board);
+}
 .types { display: flex; gap: 2px; flex: 1; overflow-x: auto; scrollbar-width: thin; }
 .types button {
   border: 0; background: none; padding: 6px 12px; border-radius: 6px; white-space: nowrap;
@@ -138,6 +142,16 @@ aside.filters { overflow-y: auto; padding: 16px 14px 24px; border-right: 1px sol
 .values .more { font: 12px var(--body); color: var(--mute); padding: 2px 6px; }
 
 .health { margin-top: 22px; border-top: 1px solid var(--rule); padding-top: 12px; }
+.use { margin-bottom: 18px; display: grid; gap: 6px; font-size: 12.5px; }
+.use input[type=text], .linkadd input {
+  font: 12.5px var(--mono); padding: 3px 6px; border: 1px solid var(--rule); border-radius: 4px; background: var(--paper);
+}
+.use input[type=text] { width: 100%; }
+.use label { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.use label > input[type=text] { flex: 1; min-width: 0; }
+.linkadd { margin-top: 6px; }
+.linkadd input { width: 8.5em; }
+.linkadd input.to { flex: 1; min-width: 6em; }
 .health button.plain { margin-right: 6px; }
 .report { font-size: 12.5px; margin-top: 8px; }
 
@@ -262,6 +276,8 @@ button.tiny:hover { color: var(--ink); }
 @media (max-width: 900px) {
   header { flex-wrap: wrap; gap: 10px; padding: 10px 12px; }
   .types { order: 3; flex-basis: 100%; }
+  .search { order: 4; flex-basis: 100%; }
+  .search input { width: 100%; }
   .switch { margin-left: auto; min-width: 0; }
   main, main.detailed { grid-template-columns: 1fr; }
   aside.filters { display: none; position: fixed; inset: 0 30% 0 0; background: var(--board); z-index: 5; box-shadow: var(--shadow); }
@@ -279,6 +295,7 @@ button.tiny:hover { color: var(--ink); }
 <header>
   <h1 class="mark">curio <span>· DataDungeon</span></h1>
   <label class="storepick"><span hidden>Store</span><select id="store"></select></label>
+  <label class="search"><span hidden>Search</span><input type="search" id="q" placeholder="Search: cattacula front night" autocomplete="off" spellcheck="false"></label>
   <nav class="types" id="types" aria-label="Asset types"></nav>
   <button class="switch" id="switch" role="switch" aria-checked="false" disabled>
     <span class="label"><span id="switchword">Update mode off</span><span class="left" id="left"></span><span class="fuse" id="fuse" hidden></span></span>
@@ -301,6 +318,7 @@ button.tiny:hover { color: var(--ink); }
 const state = {
   stores: [], store: null, types: [], type: null, filters: {}, keys: {},
   assets: [], total: 0, page: 0, limit: 1, layout: null, selected: null, record: null,
+  q: "", uses: null, unused: false, counted: null,
   key: null, idle: 600, deadline: 0, editing: null,
 };
 
@@ -395,7 +413,10 @@ function updating() { return !!state.key && writable(); }
 function saveHash() {
   const p = new URLSearchParams();
   if (state.store) p.set("store", state.store);
-  if (state.type) p.set("type", state.type);
+  if (state.type) p.set("type", state.type); else if (state.types.length) p.set("type", "*");
+  if (state.q) p.set("q", state.q);
+  if (state.uses) p.set("uses", state.uses);
+  if (state.unused) p.set("unused", "1");
   for (const [k, v] of Object.entries(state.filters)) p.set("tag." + k, v);
   if (state.page) p.set("page", state.page + 1);
   if (state.selected) p.set("id", state.selected);
@@ -406,7 +427,8 @@ function readHash() {
   const filters = {};
   for (const [k, v] of p) if (k.startsWith("tag.")) filters[k.slice(4)] = v;
   return { store: p.get("store"), type: p.get("type"), filters, id: Number(p.get("id")) || null,
-           page: Math.max(0, (Number(p.get("page")) || 1) - 1) };
+           page: Math.max(0, (Number(p.get("page")) || 1) - 1),
+           q: p.get("q") || "", uses: p.get("uses"), unused: p.get("unused") === "1" };
 }
 
 // ── stores and types ───────────────────────────────────────────────────────────────────────────
@@ -439,6 +461,8 @@ async function openStore(name, want) {
   state.store = name;
   $("store").value = name;
   state.type = null; state.types = [];
+  state.q = want.q || ""; $("q").value = state.q;
+  state.uses = want.uses || null; state.unused = !!want.unused;
   closeDetail(true);
   renderSwitch();
   try {
@@ -452,25 +476,34 @@ async function openStore(name, want) {
     return;
   }
   renderTypes();
-  const chosen = state.types.find((t) => t.name === want.type)
-    || state.types.find((t) => t.count > 0) || state.types[0];
-  if (!chosen) {
+  if (!state.types.length) {
     fill($("filters"));
     fill($("drawer"), h("p", { className: "empty" }, `${name} has no assets yet.`));
     return;
   }
-  await openType(chosen.name, want.filters || {}, want.id, want.page);
+  // Every type: asked for in the URL, or implied by a search with no type.
+  const all = want.type === "*" || (!want.type && state.q);
+  const chosen = all ? null : (state.types.find((t) => t.name === want.type)
+    || state.types.find((t) => t.count > 0) || state.types[0]);
+  await openType(chosen && chosen.name, want.filters || {}, want.id, want.page);
 }
 
+// "All" first: every type at once, which is where a search starts.
 function renderTypes() {
-  fill($("types"), ...state.types.map((t) =>
-    h("button", { "aria-pressed": String(t.name === state.type), onclick: () => openType(t.name, {}) },
-      t.name, h("span", { className: "n" }, t.count))));
+  const total = state.types.reduce((n, t) => n + t.count, 0);
+  fill($("types"),
+    h("button", { "aria-pressed": String(state.type === null), onclick: () => openType(null, {}) },
+      "All", h("span", { className: "n" }, total)),
+    ...state.types.map((t) =>
+      h("button", { "aria-pressed": String(t.name === state.type), onclick: () => openType(t.name, {}) },
+        t.name, h("span", { className: "n" }, t.count))));
 }
 
+// `name` null is every type. Tag filters belong to one type, so they start empty on a change of
+// type; a search and the use filters cross types, so they stay.
 async function openType(name, filters, id, page) {
   state.type = name;
-  state.filters = { ...filters };
+  state.filters = name ? { ...filters } : {};
   state.keys = {};
   renderTypes();
   closeDetail(true);
@@ -487,6 +520,15 @@ function registration() {
 }
 
 async function loadKeys() {
+  const box = $("filters");
+  const close = h("button", { className: "plain filtertoggle", onclick: () => document.body.classList.remove("showfilters") }, "Close");
+  if (!state.type) {
+    fill(box, close, useFilters(),
+      h("p", { className: "eyebrow" }, "Filter by tag"),
+      h("p", { className: "mute" }, "Tags belong to a type. Choose one above to filter by its tags."),
+      health());
+    return;
+  }
   let counts = {};
   try { counts = await api(`${S()}/types/${enc(state.type)}/tags`); }
   catch (e) { toast(e.message, true); }
@@ -494,9 +536,7 @@ async function loadKeys() {
   const traits = (reg && reg.pool_traits) || [];
   // A registered type's key traits first, in the order that makes its key; then the rest.
   const names = [...traits.filter((k) => k in counts), ...Object.keys(counts).filter((k) => !traits.includes(k)).sort()];
-  const box = $("filters");
-  fill(box, 
-    h("button", { className: "plain filtertoggle", onclick: () => document.body.classList.remove("showfilters") }, "Close"),
+  fill(box, close, useFilters(),
     h("p", { className: "eyebrow" }, "Filter by tag"),
     traits.length ? h("p", { className: "keyed" }, "Keyed by ", ...traits.flatMap((t, i) => [i ? " · " : "", h("b", null, t)])) : null,
     ...names.map((k) => group(k, counts[k], traits.includes(k))),
@@ -553,7 +593,52 @@ function setFilter(key, value) {
 
 function clearFilters() {
   state.filters = {};
+  state.q = ""; $("q").value = "";
+  state.uses = null; state.unused = false;
+  refreshUse();
   setFilter("", null);
+}
+
+/* WHO USES AN ASSET is a link, not a tag: `used-by` boardwalk. It is kept out of the key because use
+ * changes and one asset can have several users, so it filters across every type. */
+function useFilters() {
+  const by = h("input", { type: "text", value: state.uses || "", placeholder: "boardwalk", "aria-label": "Used by",
+    onkeydown: (e) => { if (e.key === "Enter") setUse(e.target.value.trim() || null, false); } });
+  return h("div", { className: "use" },
+    h("p", { className: "eyebrow", style: "margin:0" }, "Use"),
+    h("label", null, "Used by", by),
+    h("label", null, h("input", { type: "checkbox", checked: state.unused, onchange: (e) => setUse(null, e.target.checked) }),
+      "Used by nothing"));
+}
+
+function setUse(uses, unused) {
+  state.uses = uses;
+  state.unused = unused;
+  refreshUse();
+  closeDetail(true);
+  loadAssets(0);
+}
+
+function refreshUse() {
+  const old = document.querySelector(".use");
+  if (old) old.replaceWith(useFilters());
+}
+
+/* SEARCH. Every word must be the asset's type or one of its tag values, in any order, so
+ * `boardwalk cattacula front`, `cattacula night` and `cattacula.front.night` all find a key that
+ * starts with the type. `catt*` matches the start of a word. A search starts across every type;
+ * choosing a type tab then narrows it. */
+let searching;
+$("q").addEventListener("input", () => { clearTimeout(searching); searching = setTimeout(search, 300); });
+$("q").addEventListener("keydown", (e) => { if (e.key === "Enter") { clearTimeout(searching); search(); } });
+function search() {
+  const q = $("q").value.trim();
+  if (q === state.q) return;
+  const starting = !state.q && q;
+  state.q = q;
+  closeDetail(true);
+  if (starting && state.type) return openType(null, {});
+  loadAssets(0);
 }
 
 function health() {
@@ -589,6 +674,7 @@ async function cleanUp(out) {
   try {
     showReport(out, await api(`${S()}/vacuum`, { method: "POST", body: { delete_missing_rows: true, delete_orphan_objects: true } }), true);
     toast(`Cleaned up ${state.store}.`);
+    state.counted = null;
     loadAssets(state.page);
   } catch (e) { out.textContent = e.message; }
 }
@@ -620,8 +706,15 @@ function fit() {
 async function loadAssets(page, keep) {
   const f = fit();
   if (keep != null) page = Math.floor(keep / f.limit);
-  const q = new URLSearchParams({ type: state.type, limit: f.limit, offset: page * f.limit });
+  const q = new URLSearchParams({ limit: f.limit, page: page + 1 });
+  if (state.type) q.set("type", state.type);
+  if (state.q) q.set("q", state.q);
   for (const [k, v] of Object.entries(state.filters)) q.set("tag." + k, v);
+  if (state.uses) q.set("link.used-by", state.uses);
+  if (state.unused) q.set("unlinked", "used-by");
+  // A total reads every match, so it is asked for once per search, not on every page turn.
+  const asking = state.store + "?" + q.toString().replace(/(^|&)(limit|page)=[^&]*/g, "");
+  if (state.counted !== asking) q.set("count", 1);
   let got;
   try { got = await api(`${S()}/assets?${q}`); }
   catch (e) { fill($("drawer"), h("p", { className: "empty" }, e.message)); return; }
@@ -630,7 +723,7 @@ async function loadAssets(page, keep) {
   state.page = page;
   state.limit = f.limit;
   state.layout = f;
-  state.total = got.total;
+  if (got.total != null) { state.total = got.total; state.counted = asking; }
   state.assets = got.assets.map((x) => ({ ...x.asset, tags: x.tags }));
   renderDrawer();
   saveHash();
@@ -680,13 +773,18 @@ function pager() {
 
 function renderDrawer() {
   skeleton();
-  const chips = Object.entries(state.filters).map(([k, v]) =>
-    h("span", { className: "chip" }, `${k}=${v}`,
-      h("button", { "aria-label": `Remove ${k}=${v}`, onclick: () => setFilter(k, null) }, "×")));
+  const chip = (label, remove) => h("span", { className: "chip" }, label,
+    h("button", { "aria-label": `Remove ${label}`, onclick: remove }, "×"));
+  const chips = [
+    state.q ? chip(`“${state.q}”`, () => { $("q").value = ""; search(); }) : null,
+    state.uses ? chip(`used by ${state.uses}`, () => setUse(null, false)) : null,
+    state.unused ? chip("used by nothing", () => setUse(null, false)) : null,
+    ...Object.entries(state.filters).map(([k, v]) => chip(`${k}=${v}`, () => setFilter(k, null))),
+  ].filter(Boolean);
   const first = state.page * state.limit + 1, last = state.page * state.limit + state.assets.length;
   fill($("status"),
     h("button", { className: "plain filtertoggle", onclick: () => document.body.classList.add("showfilters") }, "Filters"),
-    h("span", { className: "count" }, `${state.total} ${state.type}`),
+    h("span", { className: "count" }, `${state.total} ${state.type || (state.total === 1 ? "asset" : "assets")}`),
     pages() > 1 ? h("span", { className: "mute" }, `showing ${first}–${last}`) : null,
     ...chips,
     chips.length > 1 ? h("button", { className: "tiny", onclick: clearFilters }, "clear all") : null,
@@ -695,7 +793,7 @@ function renderDrawer() {
   shape(state.layout);
   if (!state.assets.length) {
     fill($("grid"), h("p", { className: "empty" },
-      chips.length ? "Nothing carries all of these tags. Remove one to widen the search." : `${state.store} has no ${state.type}.`));
+      chips.length ? "Nothing matches all of these. Remove one to widen the search." : `${state.store} has no ${state.type || "assets"}.`));
     return;
   }
   fill($("grid"), ...state.assets.map(card));
@@ -723,7 +821,8 @@ function card(a) {
       well,
       h("span", { className: "cap" },
         h("span", { className: "t", "data-full": caption(a) }, caption(a)),
-        h("span", { className: "s" }, h("span", null, "#" + a.id), a.rating ? h("span", null, "★".repeat(a.rating)) : null))),
+        h("span", { className: "s" }, h("span", null, "#" + a.id), state.type ? null : h("span", null, a.asset_type),
+          a.rating ? h("span", null, "★".repeat(a.rating)) : null))),
     a.flagged ? h("span", { className: "flag", title: "Flagged" }) : null);
   if (a.media === "audio") {
     const play = h("button", { className: "play", "aria-label": `Play #${a.id}`, "aria-pressed": "false" }, "▶");
@@ -858,6 +957,8 @@ function renderDetail() {
       h("span", { style: "flex:1" }),
       h("button", { className: "plain danger", onclick: remove }, "Delete asset")) : null,
 
+    linksSection(a, canEdit),
+
     h("div", null, h("p", { className: "eyebrow" }, "Record"),
       h("dl", { className: "facts" }, ...facts.flatMap(([k, v]) => [h("dt", null, k), h("dd", null, String(v))]))),
     a.generation ? h("details", { className: "gen" }, h("summary", null, "How it was generated"), h("pre", null, pretty(a.generation))) : null,
@@ -877,6 +978,57 @@ function sortedTags(tags) {
   const order = (k) => { const i = traits.indexOf(k); return i < 0 ? 999 : i; };
   return Object.entries(tags).sort(([x], [y]) => order(x) - order(y) || x.localeCompare(y));
 }
+// An asset's links: what it links to (`used-by` boardwalk, `derived-from` #12) and what links to it.
+// In update mode a link can be added — a name, or #id for another asset — or removed.
+function linksSection(a, canEdit) {
+  const links = state.record.links || { from: [], to: [] };
+  const ref = (id) => h("button", { className: "tiny", title: `Open #${id}`, onclick: () => select(id) }, "#" + id);
+  const rows = [
+    ...links.from.map((l) => h("tr", null,
+      h("td", { className: "k" }, l.rel),
+      h("td", { className: "v" }, l.to_name != null ? l.to_name : ref(l.to_id)),
+      h("td", { className: "x" }, canEdit ? h("button", {
+        className: "tiny", "aria-label": `Remove ${l.rel} ${l.to_name ?? "#" + l.to_id}`, onclick: () => unlinkIt(a.id, l),
+      }, "×") : null))),
+    ...links.to.map((l) => h("tr", null,
+      h("td", { className: "k" }, l.rel),
+      h("td", { className: "v" }, ref(l.from_id), " links here"),
+      h("td", { className: "x" }))),
+  ];
+  return h("div", null,
+    h("p", { className: "eyebrow" }, "Links"),
+    rows.length ? h("table", { className: "tags" }, h("tbody", null, ...rows)) : h("p", { className: "mute" }, "No links."),
+    canEdit ? linkAdder(a.id) : null);
+}
+
+function linkAdder(id) {
+  const rel = h("input", { value: "used-by", "aria-label": "Relation" });
+  const to = h("input", { className: "to", placeholder: "boardwalk, or #12", "aria-label": "Link to" });
+  const add = async () => {
+    const t = to.value.trim(), r = rel.value.trim();
+    if (!t || !r) return;
+    const body = /^#\d+$/.test(t) ? { rel: r, to: Number(t.slice(1)) } : { rel: r, name: t };
+    try {
+      await api(`${S()}/assets/${id}/links`, { method: "POST", body });
+      state.record = await api(`${S()}/assets/${id}`);
+      renderDetail();
+      toast(`Linked ${r} ${t}.`);
+    } catch (e) { toast(e.message, true); }
+  };
+  to.addEventListener("keydown", (e) => { if (e.key === "Enter") add(); });
+  return h("div", { className: "row linkadd" }, rel, to, h("button", { className: "plain", onclick: add }, "Add link"));
+}
+
+async function unlinkIt(id, l) {
+  const target = l.to_name != null ? `name=${enc(l.to_name)}` : `to=${l.to_id}`;
+  try {
+    await api(`${S()}/assets/${id}/links?rel=${enc(l.rel)}&${target}`, { method: "DELETE" });
+    state.record = await api(`${S()}/assets/${id}`);
+    renderDetail();
+    toast(`Unlinked ${l.rel} ${l.to_name ?? "#" + l.to_id}.`);
+  } catch (e) { toast(e.message, true); }
+}
+
 function pretty(s) { try { return JSON.stringify(JSON.parse(s), null, 2); } catch { return s; } }
 
 function stars(n, live, set) {
@@ -943,6 +1095,7 @@ async function remove() {
     closeDetail(true);
     state.types = await api(`${S()}/types`).catch(() => state.types);
     renderTypes();
+    state.counted = null;
     loadAssets(state.page);
   } catch (e) { toast(e.message, true); }
 }
@@ -1006,6 +1159,7 @@ setInterval(tick, 1000);
 
 document.addEventListener("keydown", (e) => {
   if (e.target.closest("input, textarea, select")) return;
+  if (e.key === "/") { e.preventDefault(); $("q").focus(); $("q").select(); return; }
   if (e.key === "Escape" && state.selected) { closeDetail(); return; }
   if ((e.key === "PageDown" || e.key === "PageUp") && state.layout) {
     e.preventDefault();
