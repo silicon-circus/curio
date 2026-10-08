@@ -100,10 +100,12 @@ or a preview in the detail panel instead of a thumbnail.
 - **Filters** on the left are the type's tag names; a registered type's key traits come first, in key
   order. The bar behind each value is its share of the type. Filtering on several tags means all of
   them.
-- **Pages** of 60, newest first, with the page in the URL. The URL also keeps the store, type, filters
-  and the open asset, so a reload comes back to the same place — but never in update mode.
-- **← →** step through assets with the detail panel open, turning the page at either end. **Esc**
-  closes it.
+- **Pages** that each fit one screen, newest first: as many cards as the window holds, so the grid
+  never scrolls. Resizing the window or opening the detail panel reshapes the page and keeps the
+  selected asset in view. The page is in the URL, with the store, type, filters and the open asset,
+  so a reload comes back to the same place — but never in update mode.
+- **Page Up / Page Down** turn pages. **← →** step through assets with the detail panel open,
+  turning the page at either end. **Esc** closes it.
 
 ## Who can reach it
 

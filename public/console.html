@@ -142,34 +142,43 @@ aside.filters { overflow-y: auto; padding: 16px 14px 24px; border-right: 1px sol
 .report { font-size: 12.5px; margin-top: 8px; }
 
 /* ── the grid ──────────────────────────────────────────────────────────────────────── */
-section.drawer { overflow-y: auto; padding: 14px 18px 40px; min-width: 0; }
-.status { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; min-height: 28px; }
+/* ONE SCREEN, NO SCROLLING. The page holds as many cards as fit (see fit()), and the grid's rows and
+ * columns share out exactly the space there is. */
+section.drawer { display: flex; flex-direction: column; overflow: hidden; padding: 14px 18px; min-width: 0; min-height: 0; }
+.status {
+  flex: none; display: flex; align-items: center; gap: 10px; height: 34px; margin-bottom: 12px;
+  overflow: hidden; white-space: nowrap;
+}
 .status .count { font: 600 14px var(--display); }
 .chip {
   display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--teal); color: var(--teal);
   background: var(--paper); border-radius: 999px; padding: 2px 4px 2px 10px; font: 12px var(--mono);
 }
 .chip button { border: 0; background: none; color: inherit; padding: 0 5px; font-size: 14px; line-height: 1; }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 14px; }
+.grid {
+  flex: 1; min-height: 0; display: grid; gap: 14px;
+  grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--rows, 3), minmax(0, 1fr));
+}
 .card {
-  background: var(--paper); border-radius: 8px; overflow: hidden; position: relative;
-  border: 1px solid var(--rule); box-shadow: var(--shadow);
+  background: var(--paper); border-radius: 8px; overflow: hidden; position: relative; min-height: 0;
+  border: 1px solid var(--rule); box-shadow: var(--shadow); display: flex; flex-direction: column;
 }
 .card:hover { border-color: var(--mute); }
 .card.current { border-color: var(--teal); box-shadow: 0 0 0 2px var(--teal); }
 .card > .hit {
-  display: flex; flex-direction: column; width: 100%; border: 0; background: none; padding: 0;
-  text-align: left; border-radius: 0;
+  flex: 1; min-height: 0; display: flex; flex-direction: column; width: 100%; border: 0; background: none;
+  padding: 0; text-align: left; border-radius: 0;
 }
 .well {
-  aspect-ratio: 1; display: grid; place-items: center; overflow: hidden;
+  flex: 1; min-height: 0; display: grid; place-items: center; overflow: hidden;
   background: repeating-conic-gradient(var(--check-a) 0 25%, var(--check-b) 0 50%) 0 0 / 16px 16px;
 }
 .well img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
 .well .glyph { font: 600 34px var(--display); color: var(--mute); }
 .well.missing { background: var(--sunk); }
 .well.missing::after { content: "no object"; font: 11px var(--mono); color: var(--mute); }
-.cap { padding: 7px 9px 8px; display: grid; gap: 1px; }
+.cap { flex: none; padding: 7px 9px 8px; display: grid; gap: 1px; }
 /* Two full lines, and the name is cut in the MIDDLE to fit them (see fitCaptions): names that share a
  * long prefix differ at the end, which is exactly what a trailing ellipsis hides. */
 .cap .t { font: 12px/1.35 var(--mono); word-break: break-all; height: 2.7em; overflow: hidden; }
@@ -185,8 +194,7 @@ section.drawer { overflow-y: auto; padding: 14px 18px 40px; min-width: 0; }
 .card .play[aria-pressed="true"] { background: var(--teal); }
 .pager { display: flex; gap: 10px; align-items: center; font-size: 13px; }
 .pageno { width: 5em; padding: 3px 6px; border: 1px solid var(--rule); border-radius: 6px; background: var(--paper); font: 13px var(--mono); }
-.foot { margin-top: 18px; display: flex; justify-content: center; }
-.empty { padding: 48px 0; color: var(--mute); max-width: 46ch; }
+.empty { padding: 48px 0; color: var(--mute); max-width: 46ch; grid-column: 1 / -1; }
 .empty b { color: var(--ink); }
 
 /* ── the detail panel ──────────────────────────────────────────────────────────────── */
@@ -261,7 +269,8 @@ button.tiny:hover { color: var(--ink); }
   .filtertoggle { display: inline-block; }
   aside.detail { position: fixed; inset: 0; z-index: 6; }
   section.drawer { padding: 12px; }
-  .grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+  .status { height: 76px; flex-wrap: wrap; align-content: center; row-gap: 6px; }
+  .grid { gap: 10px; }
 }
 </style>
 </head>
@@ -289,10 +298,9 @@ button.tiny:hover { color: var(--ink); }
  * answers through. No type or tag name appears in this file: they are read from the store, because
  * every store has different ones and they get renamed. */
 
-const PAGE = 60;
 const state = {
   stores: [], store: null, types: [], type: null, filters: {}, keys: {},
-  assets: [], total: 0, page: 0, selected: null, record: null,
+  assets: [], total: 0, page: 0, limit: 1, layout: null, selected: null, record: null,
   key: null, idle: 600, deadline: 0, editing: null,
 };
 
@@ -365,8 +373,6 @@ function middle(text, max) {
   const head = Math.max(4, Math.floor((max - 1) * 0.3));
   return text.slice(0, head) + "…" + text.slice(text.length - (max - 1 - head));
 }
-let refit;
-window.addEventListener("resize", () => { clearTimeout(refit); refit = setTimeout(fitCaptions, 120); });
 function glyph(a) {
   return { audio: "♪", video: "▶", text: "¶" }[a.media] || "◇";
 }
@@ -589,45 +595,96 @@ async function cleanUp(out) {
 
 // ── the grid ───────────────────────────────────────────────────────────────────────────────────
 
-/* PAGES, NOT AN ENDLESS SCROLL. A store can hold far more than a browser wants in one grid, and a
- * page number is somewhere you can come back to: it is in the URL. */
-async function loadAssets(page) {
-  const q = new URLSearchParams({ type: state.type, limit: PAGE, offset: page * PAGE });
+/* PAGES, NOT AN ENDLESS SCROLL, AND EACH ONE EXACTLY A SCREEN. A store can hold far more than a
+ * browser wants in one grid, so a page is as many cards as fit the space the grid has: as many
+ * columns as fit at the smallest card worth looking at, then as many rows of near-square pictures as
+ * fit under them. The page number is in the URL, so it is somewhere you can come back to. */
+const narrow = () => innerWidth <= 900;
+
+function skeleton() {
+  if (!$("grid")) fill($("drawer"), h("div", { id: "status", className: "status" }), h("div", { id: "grid", className: "grid" }));
+}
+
+function fit() {
+  skeleton();
+  const g = $("grid"), gap = narrow() ? 10 : 14, smallest = narrow() ? 120 : 160;
+  const W = g.clientWidth, H = g.clientHeight;
+  const cols = Math.max(1, Math.floor((W + gap) / (smallest + gap)));
+  const cw = (W - gap * (cols - 1)) / cols;
+  const cap = document.querySelector(".card .cap")?.offsetHeight || 66;
+  const rows = Math.max(1, Math.round((H + gap) / (cw * 0.85 + cap + gap)));
+  return { cols, rows, cw, limit: Math.min(500, cols * rows) };
+}
+
+// `keep`, when given, is an asset's place in the whole list, and the page chosen is the one holding it.
+async function loadAssets(page, keep) {
+  const f = fit();
+  if (keep != null) page = Math.floor(keep / f.limit);
+  const q = new URLSearchParams({ type: state.type, limit: f.limit, offset: page * f.limit });
   for (const [k, v] of Object.entries(state.filters)) q.set("tag." + k, v);
   let got;
   try { got = await api(`${S()}/assets?${q}`); }
   catch (e) { fill($("drawer"), h("p", { className: "empty" }, e.message)); return; }
   // Past the end — an old URL, or the last asset on the last page deleted: show the last real page.
-  if (!got.assets.length && got.total > 0 && page > 0) return loadAssets(Math.floor((got.total - 1) / PAGE));
+  if (!got.assets.length && got.total > 0 && page > 0) return loadAssets(0, got.total - 1);
   state.page = page;
+  state.limit = f.limit;
+  state.layout = f;
   state.total = got.total;
   state.assets = got.assets.map((x) => ({ ...x.asset, tags: x.tags }));
   renderDrawer();
-  $("drawer").scrollTop = 0;
   saveHash();
 }
 
-function pages() { return Math.max(1, Math.ceil(state.total / PAGE)); }
+// The space changed — the window, or the detail panel opening or closing. Same number of cards:
+// just reshape the grid. A different number: fetch the page that keeps the selected asset, or the
+// first one showing, in view.
+function relayout() {
+  if (!state.layout) return;
+  const f = fit();
+  if (f.limit === state.limit) {
+    state.layout = f;
+    shape(f);
+    fitCaptions();
+    return;
+  }
+  const i = Math.max(0, state.assets.findIndex((a) => a.id === state.selected));
+  loadAssets(0, state.page * state.limit + i);
+}
+
+function shape(f) {
+  $("grid").style.setProperty("--cols", f.cols);
+  $("grid").style.setProperty("--rows", f.rows);
+}
+
+let resized;
+window.addEventListener("resize", () => { clearTimeout(resized); resized = setTimeout(relayout, 150); });
+
+function pages() { return Math.max(1, Math.ceil(state.total / state.limit)); }
+
+function goPage(p) {
+  if (p >= 0 && p < pages() && p !== state.page) loadAssets(p);
+}
 
 function pager() {
   const n = pages();
   if (n <= 1) return null;
-  const go = (p) => { if (p >= 0 && p < n && p !== state.page) loadAssets(p); };
   return h("nav", { className: "pager", "aria-label": "Pages" },
-    h("button", { className: "plain", disabled: state.page === 0, onclick: () => go(state.page - 1) }, "← Previous"),
+    h("button", { className: "plain", disabled: state.page === 0, onclick: () => goPage(state.page - 1) }, "← Previous"),
     h("label", null, "Page ",
       h("input", { className: "pageno", type: "number", min: 1, max: n, value: state.page + 1,
-        onchange: (e) => go(Math.min(n, Math.max(1, Math.round(Number(e.target.value) || 1))) - 1) }),
+        onchange: (e) => goPage(Math.min(n, Math.max(1, Math.round(Number(e.target.value) || 1))) - 1) }),
       ` of ${n}`),
-    h("button", { className: "plain", disabled: state.page >= n - 1, onclick: () => go(state.page + 1) }, "Next →"));
+    h("button", { className: "plain", disabled: state.page >= n - 1, onclick: () => goPage(state.page + 1) }, "Next →"));
 }
 
 function renderDrawer() {
+  skeleton();
   const chips = Object.entries(state.filters).map(([k, v]) =>
     h("span", { className: "chip" }, `${k}=${v}`,
       h("button", { "aria-label": `Remove ${k}=${v}`, onclick: () => setFilter(k, null) }, "×")));
-  const first = state.page * PAGE + 1, last = state.page * PAGE + state.assets.length;
-  const status = h("div", { className: "status" },
+  const first = state.page * state.limit + 1, last = state.page * state.limit + state.assets.length;
+  fill($("status"),
     h("button", { className: "plain filtertoggle", onclick: () => document.body.classList.add("showfilters") }, "Filters"),
     h("span", { className: "count" }, `${state.total} ${state.type}`),
     pages() > 1 ? h("span", { className: "mute" }, `showing ${first}–${last}`) : null,
@@ -635,13 +692,13 @@ function renderDrawer() {
     chips.length > 1 ? h("button", { className: "tiny", onclick: clearFilters }, "clear all") : null,
     h("span", { style: "flex:1" }),
     pager());
+  shape(state.layout);
   if (!state.assets.length) {
-    fill($("drawer"), status, h("p", { className: "empty" },
+    fill($("grid"), h("p", { className: "empty" },
       chips.length ? "Nothing carries all of these tags. Remove one to widen the search." : `${state.store} has no ${state.type}.`));
     return;
   }
-  const grid = h("div", { className: "grid" }, ...state.assets.map(card));
-  fill($("drawer"), status, grid, h("div", { className: "foot" }, pager()));
+  fill($("grid"), ...state.assets.map(card));
   fitCaptions();
 }
 
@@ -649,12 +706,12 @@ function card(a) {
   let well;
   if (isRaster(a.content_type) && a.file_hash) {
     well = h("div", { className: "well" }, h("img", {
-      src: thumbURL(a, 180), alt: "", loading: "lazy", decoding: "async",
+      src: thumbURL(a, state.layout ? state.layout.cw : 180), alt: "", decoding: "async",
       onerror: (e) => { e.target.remove(); well.classList.add("missing"); },
     }));
   } else if (/^image\//.test(a.content_type)) {
     well = h("div", { className: "well" }, h("img", {
-      src: objectURL(a), alt: "", loading: "lazy",
+      src: objectURL(a), alt: "",
       onerror: (e) => { e.target.remove(); well.classList.add("missing"); },
     }));
   } else {
@@ -694,7 +751,7 @@ player.addEventListener("ended", () => { if (playing) { playing.setAttribute("ar
 async function select(id) {
   state.selected = id;
   markCurrent(id);
-  if ($("detail").hidden) { $("main").classList.add("detailed"); $("detail").hidden = false; fitCaptions(); }
+  if ($("detail").hidden) { $("main").classList.add("detailed"); $("detail").hidden = false; relayout(); }
   saveHash();
   try { state.record = await api(`${S()}/assets/${id}`); }
   catch (e) { fill($("detail"), h("p", { className: "body" }, e.message)); return; }
@@ -702,11 +759,13 @@ async function select(id) {
   renderDetail();
 }
 
+// `quiet` when the caller is about to load a page anyway, so the grid is not fetched twice.
 function closeDetail(quiet) {
   state.selected = null; state.record = null; state.editing = null;
-  if (!$("detail").hidden) { $("main").classList.remove("detailed"); $("detail").hidden = true; fitCaptions(); }
+  const was = !$("detail").hidden;
+  if (was) { $("main").classList.remove("detailed"); $("detail").hidden = true; }
   markCurrent(null);
-  if (!quiet) saveHash();
+  if (!quiet) { if (was) relayout(); saveHash(); }
 }
 
 function markCurrent(id) {
@@ -881,7 +940,7 @@ async function remove() {
   try {
     await api(`${S()}/assets/${a.id}`, { method: "DELETE" });
     toast(`Deleted #${a.id}.`);
-    closeDetail();
+    closeDetail(true);
     state.types = await api(`${S()}/types`).catch(() => state.types);
     renderTypes();
     loadAssets(state.page);
@@ -948,6 +1007,11 @@ setInterval(tick, 1000);
 document.addEventListener("keydown", (e) => {
   if (e.target.closest("input, textarea, select")) return;
   if (e.key === "Escape" && state.selected) { closeDetail(); return; }
+  if ((e.key === "PageDown" || e.key === "PageUp") && state.layout) {
+    e.preventDefault();
+    goPage(state.page + (e.key === "PageDown" ? 1 : -1));
+    return;
+  }
   if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && state.selected) {
     e.preventDefault();
     step(e.key === "ArrowRight" ? 1 : -1);
@@ -966,7 +1030,6 @@ async function step(by) {
     if (!next) return;
   }
   select(next.id);
-  document.querySelector(`.card[data-id="${next.id}"]`)?.scrollIntoView({ block: "nearest" });
 }
 
 start();
