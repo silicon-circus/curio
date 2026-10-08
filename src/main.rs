@@ -1,462 +1,164 @@
-//! curio — the Silicon Circus asset server.
+//! curio — a web UI for DataDungeon stores.
 //!
-//! Tom: "An asset server. The archive can become a project to serve the assets, and keep the object
-//! and tagged hardlinks in sync." And: "Served by name. The object store is for dedup mainly."
+//! Tom, 2026-10-07: DataDungeon is the asset server from now on, and it stays free of UI code; curio
+//! becomes the UI. Filter a store's assets by tag, see what is there, and curate it — read-only by
+//! default, with a big red switch for when you mean to change something.
 //!
-//! The point is not to automate the chore, it is to delete it. A repo that references
-//! /a/boardwalk.cattacula.night.real.webp holds no asset, converts nothing, copies nothing, and
-//! cannot drift from the master. There is no step between having a picture and using it.
+//! curio holds no assets and no database. Everything it shows comes from a store's JSON API, and
+//! everything it changes is a call to that API. What it adds is what a browser cannot safely do on
+//! its own: hold the tokens, keep the write switch honest, and make thumbnails so a page of pictures
+//! is not a page of masters.
 //!
-//! This is the Rust port. See PORT.md for what changed and why — briefly: no subprocess, no
-//! objects/, bounded render surface, backup built in, and derivation that goes downward only in
-//! size as well as format.
+//! Until 0.3.2 curio was the asset server itself, serving the park's files by name. That program is
+//! tagged `v0.3.2-server`.
 
-mod api;
-mod backup;
 mod config;
-mod derive;
-mod filing;
-mod manifest;
-mod media;
-mod paths;
-mod requests;
-mod serve;
-mod store;
-mod sync;
+mod dd;
+mod routes;
+mod thumbs;
+mod update;
 
-use anyhow::Result;
-use axum::{routing::get, Router};
+use anyhow::{Context, Result};
+use axum::routing::{get, post};
+use axum::Router;
 use config::Config;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 pub struct AppState {
     pub cfg: Config,
-    pub manifest: manifest::Cache,
-    pub renderer: derive::Renderer,
-    pub requests: requests::Recorder,
+    pub dd: dd::Dd,
+    pub update: update::UpdateMode,
+    pub thumbs: thumbs::Thumbs,
+}
+
+pub fn app(state: Arc<AppState>) -> Router {
+    let s = "/api/stores/{store}";
+    Router::new()
+        .route("/", get(routes::console))
+        .route("/health", get(routes::health))
+        .route("/api/stores", get(routes::stores))
+        .route("/api/update", get(routes::update_status).post(routes::update_on).delete(routes::update_off))
+        .route(&format!("{s}/types"), get(routes::types))
+        .route(&format!("{s}/types/{{ty}}/tags"), get(routes::tag_keys))
+        .route(&format!("{s}/types/{{ty}}/tags/{{key}}"), get(routes::tag_values))
+        .route(&format!("{s}/types/{{ty}}/promote"), post(routes::promote))
+        .route(&format!("{s}/assets"), get(routes::assets))
+        .route(&format!("{s}/assets/{{id}}"),
+            get(routes::asset).patch(routes::update_asset).delete(routes::delete_asset))
+        .route(&format!("{s}/assets/{{id}}/object"), get(routes::object))
+        .route(&format!("{s}/assets/{{id}}/thumb/{{hash}}"), get(routes::thumb))
+        .route(&format!("{s}/check"), post(routes::check))
+        .route(&format!("{s}/vacuum"), post(routes::vacuum))
+        .layer(axum::middleware::from_fn_with_state(state.clone(), routes::local_only))
+        .with_state(state)
+}
+
+pub fn state(cfg: Config) -> Result<Arc<AppState>> {
+    // Bounded, because every permit is a decoded picture held in memory.
+    let jobs = std::thread::available_parallelism().map(|n| (n.get() / 2).max(1)).unwrap_or(2).min(4);
+    Ok(Arc::new(AppState {
+        dd: dd::Dd::new(),
+        update: update::UpdateMode::new(Duration::from_secs(cfg.idle_minutes * 60)),
+        thumbs: thumbs::Thumbs::new(&cfg.thumbs, jobs, cfg.thumbs_max_bytes)?,
+        cfg,
+    }))
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let cfg = Config::from_env(&project_base());
     let args: Vec<String> = std::env::args().skip(1).collect();
-
-    // NEVER CREATE A STORE BY ACCIDENT. Now that curio can be installed on the PATH, it gets run
-    // from anywhere — and ensure_dirs() on every invocation meant `curio --requested` in /tmp
-    // created /tmp/data/{assets,intake,watch,trash} and an XDG cache directory keyed to it. A tool
-    // that litters a store wherever you happen to stand is worse than one that refuses.
-    //
-    // So a store is created only where you SAID it should be. Discovery is for finding an existing
-    // one; CURIO_DATA is how you make a new one.
-    let told_where = std::env::var_os("CURIO_DATA").is_some();
-    let exists = cfg.assets().is_dir() || cfg.manifest_path().is_file();
-    if !told_where && !exists && !args.iter().any(|a| a == "--help" || a == "-h") {
-        eprintln!("curio: no store here.\n\
-            \n  Run it from inside a project — it walks up looking for one, the way git does —\n\
-            \n  or say where:   CURIO_DATA=/path/to/store curio {}\n\
-            \n  Setting CURIO_DATA is also how a new store gets created.",
-            args.join(" "));
-        std::process::exit(2);
-    }
-    cfg.ensure_dirs()?;
     let flag = |f: &str| args.iter().any(|a| a == f);
-    let value_after = |f: &str| args.iter().position(|a| a == f).and_then(|i| args.get(i + 1)).cloned();
-    if flag("--sync") {
-        return run_sync(&cfg, flag("--dry-run"), flag("--yes"));
-    }
-    if flag("--watch") {
-        return run_watch(&cfg, flag("--yes"));
-    }
-    if flag("--verify") {
-        return run_verify(&cfg);
-    }
-    if flag("--todo") {
-        return run_todo(&cfg);
-    }
-    if flag("--requested") {
-        return run_requested(&cfg);
-    }
-    if flag("--unrequested") {
-        return run_unrequested(&cfg);
-    }
-    if flag("--forget-requests") {
-        requests::Recorder::new(cfg.requests_path()).forget()?;
-        println!("  request table cleared — exercise the park and it fills again");
-        return Ok(());
-    }
-    if flag("--uncache") {
-        let n = clear_cache(&cfg)?;
-        println!("  {n} rendition(s) thrown away; they rebuild on demand");
-        return Ok(());
-    }
-    if flag("--dedup") {
-        let (count, bytes) = store::dedup(&cfg, flag("--yes"))?;
-        println!("  {count} redundant copies, {} recoverable", filing::human(bytes));
-        if !flag("--yes") {
-            println!("  nothing changed — add --yes to replace them with reflinks");
-        }
-        return Ok(());
-    }
-    if flag("--rename") {
-        let (Some(from), Some(to)) = (value_after("--rename"), args.last().cloned().filter(|t| Some(t) != value_after("--rename").as_ref()))
-        else {
-            eprintln!("usage: curio --rename <old> <new>");
-            std::process::exit(2);
-        };
-        let r = store::rename(&cfg, &from, &to)?;
-        if r.ok { println!("  {from} -> {}", r.name); } else { eprintln!("  refused: {}", r.why); std::process::exit(1); }
-        return Ok(());
-    }
-    if flag("--find") {
-        let terms: Vec<String> = args.iter().skip_while(|a| *a != "--find").skip(1).cloned().collect();
-        return run_find(&cfg, &terms);
-    }
     if flag("--help") || flag("-h") {
         print_help();
         return Ok(());
     }
-
-    // Bounded by default. Rendering is CPU-bound and every permit is a decode plus a scale held
-    // in memory, so the ceiling is deliberate rather than however many requests arrive at once.
-    let jobs = std::env::var("CURIO_RENDER_JOBS").ok().and_then(|s| s.parse().ok())
-        .unwrap_or_else(|| std::thread::available_parallelism().map(|n| (n.get() / 2).max(1)).unwrap_or(2).min(4));
-    let cache_mb: u64 = std::env::var("CURIO_CACHE_MAX_MB").ok().and_then(|s| s.parse().ok()).unwrap_or(2048);
-    let state = Arc::new(AppState {
-        manifest: manifest::Cache::new(cfg.manifest_path()),
-        renderer: derive::Renderer::new(cfg.cache(), jobs, cache_mb * (1 << 20)),
-        requests: requests::Recorder::new(cfg.requests_path()),
-        cfg,
-    });
-    eprintln!("  render jobs {jobs}, cache ceiling {cache_mb} MB");
-    // Writes go through the gate; reads do not, because the park embeds assets from its own origins.
-    let writes = Router::new()
-        .route("/api/keep", axum::routing::post(api::keep))
-        .route("/api/trash", axum::routing::post(api::trash))
-        .route("/api/unpublish", axum::routing::post(api::unpublish))
-        .route("/api/sync", axum::routing::post(api::sync_now))
-        .layer(axum::middleware::from_fn_with_state(state.clone(), api::local_writes_only));
-
-    let app = Router::new()
-        .route("/", get(api::console))
-        .route("/a/{*name}", get(serve::asset))
-        .route("/health", get(api::health))
-        .route("/api/serve", get(api::serve_list))
-        .route("/api/intake", get(api::intake_list))
-        .route("/api/watch", get(api::watch_list))
-        .route("/intake/{*file}", get(api::intake_file))
-        .merge(writes)
-        .with_state(state.clone());
-
-    // Flushed on a timer rather than per request: a park page load is sixty requests and none of
-    // them should wait on a write.
-    if state.requests.enabled() {
-        let s = state.clone();
-        tokio::spawn(async move {
-            let mut tick = tokio::time::interval(std::time::Duration::from_secs(3));
-            loop {
-                tick.tick().await;
-                if let Err(e) = s.requests.flush() {
-                    eprintln!("curio: could not write the request table: {e:#}");
-                }
-            }
-        });
+    if flag("--version") {
+        println!("curio {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+    let path = args.iter().position(|a| a == "--config")
+        .and_then(|i| args.get(i + 1)).map(PathBuf::from)
+        .unwrap_or_else(Config::default_path);
+    if !path.is_file() {
+        eprintln!("curio: no config at {}\n\n{}", path.display(), SAMPLE);
+        std::process::exit(2);
+    }
+    let cfg = Config::load(&path)?;
+    if flag("--stores") {
+        return check_stores(&cfg).await;
     }
 
-    let addr = format!("{}:{}", state.cfg.bind, state.cfg.port);
-    let listener = tokio::net::TcpListener::bind(&addr).await?;
-    eprintln!("curio {} listening on http://{}", env!("CARGO_PKG_VERSION"), addr);
-    eprintln!("  assets   {} ({} named)", state.cfg.assets().display(), state.manifest.get().len());
-    eprintln!("  manifest {}", state.cfg.manifest_path().display());
-    axum::serve(listener, app).await?;
+    let addr = format!("{}:{}", cfg.bind, cfg.port);
+    let state = state(cfg)?;
+    let listener = tokio::net::TcpListener::bind(&addr).await.with_context(|| format!("binding {addr}"))?;
+    eprintln!("curio {} on http://{addr}", env!("CARGO_PKG_VERSION"));
+    eprintln!("  config  {}", state.cfg.source.display());
+    for s in &state.cfg.stores {
+        eprintln!("  store   {:<14} {}{}", s.name, s.url, if s.writable() { "  (writable)" } else { "" });
+    }
+    if state.cfg.stores.is_empty() {
+        eprintln!("  no stores configured — add a [[store]] to the config");
+    }
+    eprintln!("  update mode lapses after {} idle minute(s)", state.cfg.idle_minutes);
+    axum::serve(listener, app(state)).await?;
     Ok(())
 }
 
-/// SYNC SHOWS ITS PLAN. Filing the store away is not destructive — every replaced version is kept —
-/// but a rename it cannot infer is a question only Tom can answer, and guessing it would quietly
-/// lose the one fact that cannot be reconstructed afterwards.
-fn run_sync(cfg: &Config, dry_run: bool, yes: bool) -> Result<()> {
-    let (plan, next) = sync::scan(cfg)?;
-    print!("{}", sync::describe(&plan));
-
-    if dry_run {
-        println!("\n  --dry-run, so nothing was written");
-        return Ok(());
-    }
-    if plan.is_quiet() {
-        println!("  nothing to do");
-        return Ok(());
-    }
-
-    // Only a one-to-one pair can be answered with a yes. Anything wider gets reported and left, and
-    // `curio rename` states it explicitly.
-    let mut links = plan.renamed.clone();
-    for a in &plan.ambiguous {
-        if a.gone.len() == 1 && a.appeared.len() == 1 {
-            let (from, to) = (&a.gone[0], &a.appeared[0]);
-            if yes {
-                println!("  --yes, so NOT linked: {from} -> {to}  (state it with `curio rename`)");
-                continue;
+/// Ask every store for its types, and say plainly which ones answer. The first thing to run after
+/// editing the config, because a wrong token or a store that is not running otherwise shows up as an
+/// empty console.
+async fn check_stores(cfg: &Config) -> Result<()> {
+    let dd = dd::Dd::new();
+    let mut failed = 0;
+    for s in &cfg.stores {
+        let rw = if s.writable() { "read-write" } else { "read-only" };
+        match dd.send(s, dd::Access::Read, axum::http::Method::GET, &["types"], None, None).await {
+            Ok(res) if res.status().is_success() => {
+                let types: serde_json::Value = res.json().await.unwrap_or_default();
+                let list = types.as_array().map(|ts| ts.iter()
+                    .map(|t| format!("{} {}", t["name"].as_str().unwrap_or("?"), t["count"]))
+                    .collect::<Vec<_>>().join(", ")).unwrap_or_default();
+                println!("  ok    {:<14} {rw:<10} {}", s.name, if list.is_empty() { "no types".into() } else { list });
             }
-            print!("\n  is  {to}  a renamed and edited  {from} ? [y/N] ");
-            use std::io::Write;
-            std::io::stdout().flush().ok();
-            let mut line = String::new();
-            if std::io::stdin().read_line(&mut line).is_ok()
-                && matches!(line.trim().to_lowercase().as_str(), "y" | "yes")
-            {
-                links.push((from.clone(), to.clone()));
-                println!("  recorded as a rename");
-            } else {
-                println!("  left unlinked");
+            Ok(res) => {
+                failed += 1;
+                println!("  FAIL  {:<14} {} answered {}", s.name, s.url, res.status());
+            }
+            Err(_) => {
+                failed += 1;
+                println!("  FAIL  {:<14} {} did not answer", s.name, s.url);
             }
         }
     }
-
-    let applied = sync::apply_with_links(cfg, &plan, &next, &links)?;
-    println!("\n  {} version(s) filed into history, mirror refreshed ({} reflinked, {} copied)",
-        applied.archived, applied.reflinked, applied.copied);
-    if let Some(stamp) = applied.stamp {
-        println!("  {}", stamp.display());
+    if failed > 0 {
+        std::process::exit(1);
     }
     Ok(())
 }
+
+const SAMPLE: &str = "\
+A config lists the DataDungeon stores to show. Make one like this, then chmod 600 it:
+
+    # ~/.config/curio/curio.toml
+    [[store]]
+    name = \"pirateship\"
+    url = \"http://127.0.0.1:7077\"      # dd-serve, or an app that mounts DataDungeon::API
+    # read_token = \"…\"                 # if the store asks for one
+    # write_token = \"…\"                # only for a store you mean to curate";
 
 fn print_help() {
-    println!("curio {} — the Silicon Circus asset server\n", env!("CARGO_PKG_VERSION"));
-    println!("  curio                     serve");
-    println!("  curio --sync [--dry-run] [--yes]");
-    println!("                            file edits away; asks about a rename it cannot infer");
-    println!("  curio --watch [--yes]     file what is in watch/, after showing the plan");
-    println!("  curio --verify            re-hash assets/ and check it against the manifest");
-    println!("  curio --find TERMS        search what will be served, derivations included");
-    println!("  curio --todo              what waits in intake/, and what watch/ is holding");
-    println!("  curio --uncache           throw away every rendition");
-    println!("  curio --dedup [--yes]     share extents between byte-identical assets");
-    println!("  curio --rename OLD NEW    state a rename so the history link survives");
-    println!("  curio --requested         every name ever asked for, and what was refused");
-    println!("  curio --unrequested       stored names nobody has asked for");
-    println!("  curio --forget-requests   clear the table before a fresh walkthrough");
-    println!("\n  CURIO_PORT {} · CURIO_BIND {} · CURIO_DATA · CURIO_PUBLIC",
-        config::DEFAULT_PORT, config::DEFAULT_BIND);
-}
-
-fn run_watch(cfg: &Config, yes: bool) -> Result<()> {
-    let items = filing::plan(cfg);
-    print!("{}", filing::describe(&items));
-    let todo = items.iter().filter(|i| i.kind != filing::Kind::Held).count();
-    if todo == 0 {
-        println!("  nothing to file");
-        return Ok(());
-    }
-    if !yes && !ask(&format!("\nfile {todo} item(s)?"))? {
-        println!("  nothing done");
-        return Ok(());
-    }
-    let r = filing::apply(cfg, &items, &mut std::io::stdout())?;
-    println!("\n  filed {} ({} files){}", r.filed, r.files,
-        if r.skipped > 0 { format!(", {} skipped", r.skipped) } else { String::new() });
-    println!("  run `curio --sync` to index them");
-    Ok(())
-}
-
-/// VERIFY THE FILES THAT ARE ACTUALLY SERVED.
-///
-/// The Crystal re-hashed `objects/` against its own filenames, which checked the archive copy rather
-/// than the working set. With the manifest holding a hash per asset, the useful question is whether
-/// what is being served still matches what was recorded — which is also the only thing that can
-/// catch a same-size, same-second edit that the stat shortcut cannot see.
-fn run_verify(cfg: &Config) -> Result<()> {
-    let m = manifest::load(&cfg.manifest_path())?;
-    let found = sync::walk(&cfg.assets())?;
-    let started = std::time::Instant::now();
-    let mut checked = 0usize;
-    let mut changed = Vec::new();
-    let mut missing = Vec::new();
-    for (name, entry) in &m {
-        let path = cfg.assets().join(name);
-        if !path.is_file() {
-            missing.push(name.clone());
-            continue;
-        }
-        checked += 1;
-        if manifest::sha256(&path)? != entry.hash {
-            changed.push(name.clone());
-        }
-    }
-    let untracked: Vec<&String> = found.keys().filter(|n| !m.contains_key(*n)).collect();
-    println!("  verified {checked} assets in {:.1}s", started.elapsed().as_secs_f64());
-    println!("  differing from the manifest: {}", changed.len());
-    for c in changed.iter().take(20) { println!("    {c}"); }
-    println!("  named but not on disk: {}", missing.len());
-    for c in missing.iter().take(20) { println!("    {c}"); }
-    println!("  on disk but not named: {}", untracked.len());
-    for c in untracked.iter().take(20) { println!("    {c}"); }
-    if !changed.is_empty() || !missing.is_empty() || !untracked.is_empty() {
-        println!("\n  `curio --sync` reconciles all three");
-    }
-    Ok(())
-}
-
-/// Searches what curio will SERVE, which is not what it stores: most of the park's webp are derived
-/// from a png master, so a search over stored files only ever answered half the question.
-fn run_find(cfg: &Config, terms: &[String]) -> Result<()> {
-    let m = manifest::load(&cfg.manifest_path())?;
-    let lower: Vec<String> = terms.iter().map(|t| t.to_lowercase()).collect();
-    let hit = |n: &str| { let n = n.to_lowercase(); lower.iter().all(|t| n.contains(t)) };
-    for name in m.keys().filter(|n| hit(n)) {
-        println!("/a/{name}");
-    }
-    for entry in m.values() {
-        let ext = derive::ext_of(std::path::Path::new(&entry.name));
-        for target in derive::targets_for(&ext) {
-            let d = format!("{}.{}", entry.name.trim_end_matches(&format!(".{ext}")), target);
-            if !m.contains_key(&d) && hit(&d) {
-                println!("/a/{d}   (derived from {ext})");
-            }
-        }
-    }
-    Ok(())
-}
-
-/// EVERYTHING THAT HAS BEEN ASKED FOR, which is not the same as everything that exists.
-///
-/// The point of this pair is to build a declared list of what a consumer actually needs, and then to
-/// keep checking it. Clear the table, exercise the park, and read it: that is the used set, including
-/// names built at runtime that no grep of the source can find.
-///
-/// It records what was EXERCISED, so it is one of two inputs rather than the answer. Union it with a
-/// static scan of the consumer's own source — seasonal art and a setting nobody toggled will not
-/// appear here, and a name assembled at runtime will not appear there. Where the two disagree is
-/// exactly what is worth looking at.
-fn run_requested(cfg: &Config) -> Result<()> {
-    let Some(path) = cfg.requests_path() else {
-        println!("  recording is off (CURIO_REQUESTS=none)");
-        return Ok(());
-    };
-    let table = requests::load(&path)?;
-    if table.is_empty() {
-        println!("  nothing recorded yet — start curio, use the park, then look again");
-        return Ok(());
-    }
-    let served: Vec<_> = table.iter().filter(|(_, s)| (200..300).contains(&s.status)).collect();
-    let refused: Vec<_> = table.iter().filter(|(_, s)| s.status >= 400).collect();
-    let derived: Vec<_> = served.iter().filter(|(_, s)| !s.derived_from.is_empty()).collect();
-
-    println!("  {} names served, {} of them derived, {} refused\n", served.len(), derived.len(), refused.len());
-    for (name, s) in &served {
-        if s.derived_from.is_empty() {
-            println!("  {:>6}  {}", s.hits, name);
-        } else {
-            println!("  {:>6}  {}   <- {}", s.hits, name, s.derived_from);
-        }
-    }
-    if !refused.is_empty() {
-        // The interesting rows. A name asked for and not served is a broken reference, and nothing
-        // else in curio surfaces one.
-        println!("\n  ASKED FOR AND NOT SERVED — each of these is a broken reference somewhere:");
-        for (name, s) in &refused {
-            println!("  {:>6}  {}  ({})", s.hits, name, s.status);
-        }
-    }
-    Ok(())
-}
-
-/// What is in the store and has never been asked for — the list you would prune by, once you trust
-/// that the park has been exercised properly.
-fn run_unrequested(cfg: &Config) -> Result<()> {
-    let Some(path) = cfg.requests_path() else {
-        println!("  recording is off (CURIO_REQUESTS=none)");
-        return Ok(());
-    };
-    let table = requests::load(&path)?;
-    if table.is_empty() {
-        println!("  nothing recorded yet, so everything would look unused — not printing 1000 names");
-        return Ok(());
-    }
-    let asked: std::collections::BTreeSet<&String> = table.keys().collect();
-    let m = manifest::load(&cfg.manifest_path())?;
-    let mut bytes = 0u64;
-    let mut names = Vec::new();
-    for e in m.values() {
-        // A master that fed a derivation counts as used, even though nobody asked for it by name.
-        let fed_a_rendition = table.values().any(|s| s.derived_from == e.name);
-        if !asked.contains(&e.name) && !fed_a_rendition {
-            bytes += e.size;
-            names.push((e.size, e.name.clone()));
-        }
-    }
-    names.sort_by_key(|(size, _)| std::cmp::Reverse(*size));
-    println!("  {} of {} stored names were never asked for, {:.1} MB\n",
-        names.len(), m.len(), bytes as f64 / 1e6);
-    for (size, name) in names.iter().take(40) {
-        println!("  {:>9}  {}", filing::human(*size), name);
-    }
-    if names.len() > 40 {
-        println!("  ... and {} more", names.len() - 40);
-    }
-    println!("\n  Exercise everything before trusting this: it lists what was not asked for during\n  \
-             whatever you happened to do, and seasonal or conditional art will be in here wrongly.");
-    Ok(())
-}
-
-fn run_todo(cfg: &Config) -> Result<()> {
-    let waiting = store::intake_list(cfg);
-    println!("  {} in intake", waiting.len());
-    for w in waiting.iter().take(40) {
-        println!("    {}  {}", filing::human(w.size), w.file);
-    }
-    let items = filing::plan(cfg);
-    println!("  {} waiting in watch (run: curio --watch)", items.len());
-    print!("{}", filing::describe(&items));
-    Ok(())
-}
-
-/// Note the explicit prefix test: a glob would skip the hidden staging files, which is the trap both
-/// `rm -rf cache/*` and Crystal's Dir.glob fell into.
-fn clear_cache(cfg: &Config) -> Result<usize> {
-    let mut n = 0;
-    for e in std::fs::read_dir(cfg.cache())?.flatten() {
-        if e.path().is_file() && std::fs::remove_file(e.path()).is_ok() {
-            n += 1;
-        }
-    }
-    Ok(n)
-}
-
-fn ask(prompt: &str) -> Result<bool> {
-    use std::io::Write;
-    print!("{prompt} [y/N] ");
-    std::io::stdout().flush()?;
-    let mut line = String::new();
-    std::io::stdin().read_line(&mut line)?;
-    Ok(matches!(line.trim().to_lowercase().as_str(), "y" | "yes"))
-}
-
-/// WHERE THE STORE IS, DECIDED WITHOUT GUESSING.
-///
-/// `CURIO_DATA` if set; otherwise `./data` relative to the current working directory. Deliberately
-/// not derived from the binary's own location: the Crystal version resolved it from `__DIR__` at
-/// COMPILE time, so a binary built in one directory and copied to a server went looking for the
-/// build machine's path, found nothing, and served an empty store while cheerfully reporting
-/// `"ok": true`. An earlier draft of this function guessed from the executable instead and put the
-/// store in `target/` — the same class of mistake, one layer along.
-///
-/// A deployment sets CURIO_DATA. Everything else is a developer in the project directory.
-fn project_base() -> PathBuf {
-    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    println!("curio {} — a web UI for DataDungeon stores\n", env!("CARGO_PKG_VERSION"));
+    println!("    curio                    serve the console (http://127.0.0.1:19463)");
+    println!("    curio --stores           check that every configured store answers");
+    println!("    curio --config PATH      use this config instead of the default\n");
+    println!("    CURIO_CONFIG             the config (default ~/.config/curio/curio.toml)");
+    println!("    CURIO_PORT, CURIO_BIND   override the config's port and bind address");
+    println!("    CURIO_CACHE              thumbnails (default ~/.cache/curio/thumbs)");
+    println!("    CURIO_CACHE_MAX_MB       thumbnail cache ceiling (default 1024)\n");
+    println!("{SAMPLE}");
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn project_base_is_not_compiled_in() {
-        // The Crystal resolved its data root from __DIR__ at COMPILE time, so a binary copied
-        // elsewhere hunted for the build machine's directory and served an empty store while
-        // reporting "ok": true. This one follows the running executable.
-        let base = project_base();
-        assert!(base.is_absolute() || base == PathBuf::from("."));
-    }
-}
+mod tests;

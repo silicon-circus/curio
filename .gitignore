@@ -1,5 +1,5 @@
-# the assets themselves are not source. data/ is the live store; the rest are the
-# pre-server layout, still on disk untouched until you decide to remove them.
+# Not source. data/ is boardwalk's art from when curio served it, waiting to move into a
+# DataDungeon store; the rest are older layouts, still on disk untouched until you decide.
 data/
 object/
 source/

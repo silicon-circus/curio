@@ -1,257 +1,144 @@
-//! Where everything lives, and the only place that decides it.
+//! WHICH STORES, AND WHAT CURIO MAY DO TO EACH.
 //!
-//! A STORE IS A PROJECT, LIKE A GIT REPOSITORY — and its directories are split by how much you
-//! would mind losing them, not by what is tidiest to put together.
+//! curio holds no assets. Each store is a DataDungeon reached over its JSON API — `dd-serve` beside a
+//! database, or the API mounted inside the app that owns it — and curio is told where they are in
+//! one file:
 //!
-//! You point curio at a project root and that is where your files live. One global store for
-//! everything works, but per-project isolates one asset set from another, makes a project portable
-//! and backed up as a unit, and stops mattering less as more consumers than boardwalk appear.
+//!     # ~/.config/curio/curio.toml
+//!     [[store]]
+//!     name = "pirateship"
+//!     url = "http://127.0.0.1:7077"
+//!     read_token = "…"        # if the store asks for one
+//!     write_token = "…"       # only if you mean to curate it
 //!
-//!   VALUABLE — you touch these, and they live in the project root, visible and draggable:
-//!     assets/ intake/ trash/ watch/ and manifest.tsv
-//!   REGENERABLE — out of the working tree entirely, because it rebuilds:
-//!     the cache, under XDG (~/.cache/curio/<project>)
-//!   SAFETY COPY — never inside the thing it is a copy of:
-//!     the backup, under XDG (~/.local/share/curio/<project>/backup)
+//! THE TOKENS LIVE HERE AND NOWHERE ELSE. Not in the page, not in a URL, not in the browser's
+//! storage: curio's server attaches them on the way through. A store with no write token is
+//! read-only in curio whatever the update switch says, and DataDungeon would refuse the write
+//! anyway, so the switch only ever matters for stores that were deliberately given one.
 //!
-//! Both of the last two are independently configurable, which is what lets one binary be a
-//! repo-shaped tool on a workstation and a minimal headless server in production. On a park droplet:
-//! CURIO_DATA=/var/lib/curio holds assets/ and nothing else, CURIO_CACHE=/var/cache/curio because
-//! FHS says /var/cache is for what can be regenerated, and CURIO_BACKUP=none because the
-//! authoritative store and its history live on the workstation — server recovery is another rsync.
-//!
-//! SIX DIRECTORIES, AND EACH ONE ANSWERS A DIFFERENT QUESTION.
-//!
-//!   watch/    "file this for me" — drop something in with the name you want and it is filed and
-//!             published without being asked twice. `curio --watch` prints what it intends to do
-//!             and then asks, because a folder you are still arranging looks exactly like a folder
-//!             you have finished arranging, and only you know which.
-//!   intake/   "is this a keeper?" — the only chore. Things land here; you look at them and say
-//!             keep (with a name) or bin. Anything ambiguous comes here rather than being guessed
-//!             at, which is what keeps the automatic path safe.
-//!   assets/   "what can be asked for by name?" — the working set, and the filename IS the URL.
-//!             Open one in GIMP and touch it up; that is the point.
-//!   backup/   "what was this file yesterday?" — current/ mirrors assets/, history/<stamp>/ holds
-//!             the versions that were replaced. Read-only, reflinked, and the system's doing, not
-//!             yours: see the note on trash/ below.
-//!   cache/    "have I already answered this exact request?" — renditions. Disposable.
-//!   trash/    "what did I throw away?" — YOURS. "I probably don't need this any more, but I am not
-//!             deleting it yet, just in case." Deliberate, and never pruned on a schedule, which is
-//!             precisely why backup/history/ CAN be: nothing in there was put there on purpose.
-//!
-//! There is no objects/. It saved 35 files of deduplication out of 1051, held 749 objects that no
-//! name pointed at, and kept no record of what any of them used to be called — so "version history,
-//! and it's free" was retention without recall. backup/ keeps the same bytes under the name they had
-//! and the date they were replaced, which is the part that was missing.
+//! A list rather than one URL because that is what DataDungeon is in production — each app's store
+//! lives on that app's server.
 
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
+use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
-/// Default port. 19463 is curio's allocated slot; 26037 was a number somebody picked.
+/// curio's allocated slot.
 pub const DEFAULT_PORT: u16 = 19463;
 
-/// LOOPBACK BY DEFAULT, because there is no password on any of this.
-///
-/// The routes that mutate the store do not ask who is calling. That is right for a tool serving one
-/// machine's browser and wrong the moment the port is reachable from anywhere else, so the open
-/// state has to be typed. `CURIO_BIND=0.0.0.0` belongs only behind something that terminates the
-/// public side and forwards nothing but reads.
+/// LOOPBACK, BECAUSE CURIO HOLDS EVERY STORE'S TOKENS. Anything that can reach this port can read
+/// every store configured here, and write to any store with a write token while update mode is on.
+/// Reach it from elsewhere through an SSH tunnel, not by binding wider.
 pub const DEFAULT_BIND: &str = "127.0.0.1";
+
+/// How long update mode survives without being used.
+pub const DEFAULT_IDLE_MINUTES: u64 = 10;
 
 #[derive(Debug, Clone)]
 pub struct Config {
-    pub data_root: PathBuf,
-    pub public: PathBuf,
     pub port: u16,
     pub bind: String,
-    /// `None` means the XDG default for this project. Held as a field rather than read from the
-    /// environment on each call, so a store can be described without touching process-wide state —
-    /// which is also what makes the tests hermetic instead of writing into the real ~/.cache.
-    cache_at: Option<PathBuf>,
-    backup_at: Option<PathBuf>,
-    backup_off: bool,
+    pub idle_minutes: u64,
+    pub thumbs: PathBuf,
+    pub thumbs_max_bytes: u64,
+    pub stores: Vec<Store>,
+    /// Where it was read from, for the startup message.
+    pub source: PathBuf,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Store {
+    pub name: String,
+    pub url: String,
+    pub read_token: Option<String>,
+    pub write_token: Option<String>,
+}
+
+impl Store {
+    pub fn writable(&self) -> bool {
+        self.write_token.is_some()
+    }
+}
+
+/// The file as written. Everything but the stores has a default.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct File {
+    port: Option<u16>,
+    bind: Option<String>,
+    idle_minutes: Option<u64>,
+    thumbs_max_mb: Option<u64>,
+    #[serde(default)]
+    store: Vec<Store>,
 }
 
 impl Config {
-    /// Read from the environment, falling back to paths relative to `base` (the directory holding
-    /// the project, not the binary — a compiled-in path is how the Crystal ended up unable to be
-    /// moved without being rebuilt).
-    /// FIND THE STORE THE WAY GIT FINDS A REPOSITORY.
-    ///
-    /// Walk up from `start` until a directory looks like a store — one holding `assets/`, or a
-    /// `manifest.tsv` from a store that has been synced. That is what makes an installed `curio` on
-    /// the PATH usable: without it the data root is `./data` relative to wherever you happen to be
-    /// standing, so running the command from anywhere but the project directory silently finds
-    /// nothing. `CURIO_DATA` still wins, and still has to be set for a service.
-    pub fn discover(start: &Path) -> Option<PathBuf> {
-        let mut dir = start.canonicalize().ok()?;
-        loop {
-            if dir.join("assets").is_dir() || dir.join("manifest.tsv").is_file() {
-                return Some(dir);
+    /// `--config PATH`, else `CURIO_CONFIG`, else `$XDG_CONFIG_HOME/curio/curio.toml`.
+    pub fn default_path() -> PathBuf {
+        env_path("CURIO_CONFIG").unwrap_or_else(|| xdg_dir("XDG_CONFIG_HOME", ".config").join("curio/curio.toml"))
+    }
+
+    pub fn load(path: &Path) -> Result<Config> {
+        let text = std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+        warn_if_readable_by_others(path);
+        let mut cfg = Config::parse(&text).with_context(|| format!("in {}", path.display()))?;
+        cfg.source = path.to_path_buf();
+        Ok(cfg)
+    }
+
+    pub fn parse(text: &str) -> Result<Config> {
+        let f: File = toml::from_str(text)?;
+        let mut seen = std::collections::HashSet::new();
+        for s in &f.store {
+            if !valid_name(&s.name) {
+                bail!("store name {:?} must be lowercase letters, digits and dashes", s.name);
             }
-            // the conventional layout, where the store is a `data/` inside the project
-            let nested = dir.join("data");
-            if nested.join("assets").is_dir() || nested.join("manifest.tsv").is_file() {
-                return Some(nested);
+            if !seen.insert(s.name.clone()) {
+                bail!("store {:?} is listed twice", s.name);
             }
-            if !dir.pop() {
-                return None;
+            if !(s.url.starts_with("http://") || s.url.starts_with("https://")) {
+                bail!("store {:?}: url must start with http:// or https://", s.name);
             }
+            reqwest::Url::parse(&s.url).with_context(|| format!("store {:?}: bad url", s.name))?;
         }
+        let port = env_parse("CURIO_PORT").or(f.port).unwrap_or(DEFAULT_PORT);
+        let bind = std::env::var("CURIO_BIND").ok().filter(|b| !b.is_empty())
+            .or(f.bind).unwrap_or_else(|| DEFAULT_BIND.to_string());
+        Ok(Config {
+            port,
+            bind,
+            idle_minutes: f.idle_minutes.unwrap_or(DEFAULT_IDLE_MINUTES).max(1),
+            thumbs: env_path("CURIO_CACHE").unwrap_or_else(|| xdg_dir("XDG_CACHE_HOME", ".cache").join("curio/thumbs")),
+            thumbs_max_bytes: env_parse("CURIO_CACHE_MAX_MB").or(f.thumbs_max_mb).unwrap_or(1024) << 20,
+            stores: f.store,
+            source: PathBuf::new(),
+        })
     }
 
-    pub fn from_env(base: &Path) -> Self {
-        let raw_backup = std::env::var("CURIO_BACKUP").unwrap_or_default();
-        let backup_off = matches!(raw_backup.as_str(), "none" | "off");
-        Config {
-            data_root: env_path("CURIO_DATA")
-                .or_else(|| Self::discover(base))
-                .unwrap_or_else(|| base.join("data")),
-            public: env_path("CURIO_PUBLIC").unwrap_or_else(|| base.join("public")),
-            port: std::env::var("CURIO_PORT").ok().and_then(|s| s.parse().ok()).unwrap_or(DEFAULT_PORT),
-            bind: std::env::var("CURIO_BIND").unwrap_or_else(|_| DEFAULT_BIND.to_string()),
-            cache_at: env_path("CURIO_CACHE"),
-            backup_at: if backup_off { None } else { env_path("CURIO_BACKUP") },
-            backup_off,
-        }
-    }
-
-    /// A project at `data_root`, with the cache and backup in their XDG places.
-    pub fn for_root(data_root: PathBuf) -> Self {
-        Config {
-            public: data_root.join("public"),
-            data_root,
-            port: DEFAULT_PORT,
-            bind: DEFAULT_BIND.to_string(),
-            cache_at: None,
-            backup_at: None,
-            backup_off: false,
-        }
-    }
-
-    /// A store that keeps everything, cache and backup included, inside one directory.
-    ///
-    /// Not the default — a copy inside the thing it copies is the arrangement this layout exists to
-    /// avoid — but it is the right shape for a throwaway store, and it is what the tests use so that
-    /// running them cannot litter a real home directory.
-    pub fn isolated(data_root: PathBuf) -> Self {
-        Config {
-            cache_at: Some(data_root.join("cache")),
-            backup_at: Some(data_root.join("backup")),
-            ..Self::for_root(data_root)
-        }
-    }
-
-    pub fn assets(&self) -> PathBuf { self.data_root.join("assets") }
-    pub fn watch(&self) -> PathBuf { self.data_root.join("watch") }
-    pub fn intake(&self) -> PathBuf { self.data_root.join("intake") }
-    pub fn trash(&self) -> PathBuf { self.data_root.join("trash") }
-    /// A stable, legible key for this store: the project directory's own name, plus enough of a
-    /// digest of its absolute path that two projects called `art` cannot collide.
-    pub fn project_key(&self) -> String {
-        use sha2::{Digest, Sha256};
-        let canonical = self.data_root.canonicalize().unwrap_or_else(|_| self.data_root.clone());
-        let digest: String = Sha256::digest(canonical.to_string_lossy().as_bytes())
-            .iter().take(4).map(|b| format!("{b:02x}")).collect();
-        let name = canonical.file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .filter(|n| !n.is_empty())
-            .unwrap_or_else(|| "store".into());
-        format!("{name}-{digest}")
-    }
-
-    /// Renditions. Regenerable, so it belongs out of the project entirely.
-    pub fn cache(&self) -> PathBuf {
-        self.cache_at.clone().unwrap_or_else(||
-            xdg_dir("XDG_CACHE_HOME", ".cache").join("curio").join(self.project_key()))
-    }
-
-    /// The safety copy, which is never inside the thing it is a copy of.
-    ///
-    /// XDG *data*, not XDG cache: this is the one directory here whose loss cannot be undone by
-    /// regenerating it. `CURIO_BACKUP=none` turns it off, which is what a server wants — its masters
-    /// arrived from somewhere that already has the history.
-    pub fn backup(&self) -> PathBuf {
-        self.backup_at.clone().unwrap_or_else(||
-            xdg_dir("XDG_DATA_HOME", ".local/share").join("curio").join(self.project_key()).join("backup"))
-    }
-
-    pub fn backup_enabled(&self) -> bool {
-        !self.backup_off
-    }
-    /// A read-only reflink mirror of assets/ as of the last sync. This is what makes undo possible:
-    /// by the time sync notices an edit the old bytes are already overwritten, and they survive
-    /// only because this captured them at the PREVIOUS sync.
-    pub fn backup_current(&self) -> PathBuf { self.backup().join("current") }
-    pub fn backup_history(&self) -> PathBuf { self.backup().join("history") }
-    /// What curio knows about assets/ without re-hashing the whole store on every boot.
-    pub fn manifest_path(&self) -> PathBuf { self.data_root.join("manifest.tsv") }
-
-    /// One row per distinct name ever requested. `CURIO_REQUESTS=none` turns it off.
-    ///
-    /// In the project root rather than under XDG: it is a small file about THIS store, and its whole
-    /// purpose is to be read by a person working out what a consumer actually fetches.
-    pub fn requests_path(&self) -> Option<PathBuf> {
-        match std::env::var("CURIO_REQUESTS").unwrap_or_default().as_str() {
-            "none" | "off" => None,
-            "" => Some(self.data_root.join("requests.tsv")),
-            other => Some(PathBuf::from(other)),
-        }
-    }
-
-    /// Everything this store uses, wherever it has been pointed.
-    pub fn dirs(&self) -> Vec<PathBuf> {
-        let mut v = vec![self.data_root.clone(), self.assets(), self.cache()];
-        if self.backup_enabled() {
-            v.push(self.backup());
-            v.push(self.backup_current());
-            v.push(self.backup_history());
-        }
-        v
-    }
-
-    /// The three a person drags files into. Made when a store is first created and never
-    /// re-created, so a headless server that only ever receives `assets/` does not accumulate empty
-    /// directories for chores it will never do.
-    fn authoring_dirs(&self) -> Vec<PathBuf> {
-        vec![self.intake(), self.watch(), self.trash()]
-    }
-
-    /// Make every directory, and collect abandoned render scratch on the way up.
-    pub fn ensure_dirs(&self) -> Result<()> {
-        let fresh = !self.assets().is_dir();
-        for d in self.dirs() {
-            std::fs::create_dir_all(&d)?;
-        }
-        if fresh {
-            for d in self.authoring_dirs() {
-                std::fs::create_dir_all(&d)?;
-            }
-        }
-        self.sweep_cache_scratch()
-    }
-
-    /// A render killed partway — Ctrl-C is enough — leaves its staging file behind, and nothing ever
-    /// collected them. Note the explicit prefix test rather than a glob: shell globs and Crystal's
-    /// Dir.glob both skip hidden entries by default, and every one of these is hidden by design.
-    /// That trap has now been walked into twice, in two languages.
-    pub fn sweep_cache_scratch(&self) -> Result<()> {
-        let cache = self.cache();
-        if !cache.is_dir() {
-            return Ok(());
-        }
-        for entry in std::fs::read_dir(&cache)? {
-            let entry = entry?;
-            if entry.file_name().to_string_lossy().starts_with(SCRATCH_PREFIX) {
-                let _ = std::fs::remove_file(entry.path());
-            }
-        }
-        Ok(())
+    pub fn store(&self, name: &str) -> Option<&Store> {
+        self.stores.iter().find(|s| s.name == name)
     }
 }
 
-/// Staging files are hidden so that nothing serving or listing the cache ever sees a partial write.
-pub const SCRATCH_PREFIX: &str = ".tmp-";
+/// The name goes into curio's own URLs, so it is kept to what needs no escaping.
+fn valid_name(name: &str) -> bool {
+    !name.is_empty() && name.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+}
+
+/// The file holds tokens; say so if anyone else on the machine can read them. A warning rather than a
+/// refusal, because the fix is one chmod and the user may have a reason.
+fn warn_if_readable_by_others(path: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(m) = std::fs::metadata(path) {
+            if m.permissions().mode() & 0o077 != 0 {
+                eprintln!("curio: {} holds tokens and others can read it — chmod 600 it", path.display());
+            }
+        }
+    }
+}
 
 /// `$XDG_*_HOME` when set and absolute, else `$HOME/<fallback>`, else a relative path so that a
 /// process with no HOME still runs rather than panicking.
@@ -269,171 +156,52 @@ fn env_path(key: &str) -> Option<PathBuf> {
     std::env::var(key).ok().filter(|s| !s.is_empty()).map(PathBuf::from)
 }
 
+fn env_parse<T: std::str::FromStr>(key: &str) -> Option<T> {
+    std::env::var(key).ok().and_then(|s| s.parse().ok())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn tmp(name: &str) -> PathBuf {
-        let p = std::env::temp_dir().join(format!("curio-cfg-{}-{}", name, std::process::id()));
-        let _ = std::fs::remove_dir_all(&p);
-        p
-    }
-
     #[test]
-    fn ensure_dirs_creates_every_directory() {
-        let root = tmp("dirs");
-        let cfg = Config::isolated(root.clone());
-        cfg.ensure_dirs().unwrap();
-        for d in cfg.dirs() {
-            assert!(d.is_dir(), "{} was not created", d.display());
-        }
-        // the ones that did not exist before this port
-        assert!(cfg.backup_current().is_dir());
-        assert!(cfg.backup_history().is_dir());
-        // and the one that must NOT come back
-        assert!(!root.join("objects").exists(), "objects/ is gone and should stay gone");
-        assert!(!root.join("names").exists(), "names/ is called assets/ now");
-        std::fs::remove_dir_all(&root).unwrap();
-    }
-
-    #[test]
-    fn ensure_dirs_sweeps_scratch_but_keeps_renditions() {
-        let root = tmp("sweep");
-        let cfg = Config::isolated(root.clone());
-        cfg.ensure_dirs().unwrap();
-        std::fs::write(cfg.cache().join(".tmp-123-x.webp"), b"partial").unwrap();
-        std::fs::write(cfg.cache().join(".tmp-9.webp"), b"partial").unwrap();
-        std::fs::write(cfg.cache().join("real.s1.m1.q82.webp"), b"whole").unwrap();
-        cfg.ensure_dirs().unwrap();
-        let left: Vec<String> = std::fs::read_dir(cfg.cache()).unwrap()
-            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
-        assert_eq!(left, vec!["real.s1.m1.q82.webp".to_string()]);
-        std::fs::remove_dir_all(&root).unwrap();
+    fn stores_keep_their_order_and_tokens() {
+        let cfg = Config::parse(r#"
+            idle_minutes = 5
+            [[store]]
+            name = "pirateship"
+            url = "http://127.0.0.1:7077"
+            [[store]]
+            name = "cattacula"
+            url = "https://cattacula.example/dd"
+            read_token = "r"
+            write_token = "w"
+        "#).unwrap();
+        assert_eq!(cfg.stores.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["pirateship", "cattacula"]);
+        assert!(!cfg.store("pirateship").unwrap().writable());
+        assert!(cfg.store("cattacula").unwrap().writable());
+        assert_eq!(cfg.idle_minutes, 5);
     }
 
     #[test]
     fn defaults_are_loopback_and_the_allocated_port() {
-        let cfg = Config::isolated(PathBuf::from("/nowhere"));
-        assert_eq!(cfg.port, 19463);
-        assert_eq!(cfg.bind, "127.0.0.1");
-    }
-}
-
-
-#[cfg(test)]
-mod layout_tests {
-    use super::*;
-
-    fn isolated(name: &str) -> PathBuf {
-        let p = std::env::temp_dir().join(format!("curio-layout-{}-{}", name, std::process::id()));
-        let _ = std::fs::remove_dir_all(&p);
-        std::fs::create_dir_all(&p).unwrap();
-        p
-    }
-
-    #[test]
-    fn the_project_key_is_legible_and_path_specific() {
-        let a = isolated("keya");
-        let b = isolated("keyb");
-        let ka = Config::for_root(a.clone()).project_key();
-        let kb = Config::for_root(b.clone()).project_key();
-        assert_ne!(ka, kb, "two projects must not share a key");
-        assert!(ka.starts_with(a.file_name().unwrap().to_string_lossy().as_ref()),
-            "the key should be readable: {ka}");
-        // and stable across calls
-        assert_eq!(ka, Config::for_root(a.clone()).project_key());
-        std::fs::remove_dir_all(&a).unwrap();
-        std::fs::remove_dir_all(&b).unwrap();
-    }
-
-    #[test]
-    fn cache_and_backup_are_not_inside_the_project() {
-        // The point of the split: a copy is never kept inside the thing it is a copy of, and
-        // something regenerable never sits in the working tree.
-        let root = isolated("outside");
-        let cfg = Config::for_root(root.clone());
-        assert!(!cfg.cache().starts_with(&root), "cache is inside the project: {:?}", cfg.cache());
-        assert!(!cfg.backup().starts_with(&root), "backup is inside the project: {:?}", cfg.backup());
-        assert!(cfg.assets().starts_with(&root), "assets must be IN the project");
-        std::fs::remove_dir_all(&root).unwrap();
-    }
-
-    #[test]
-    fn a_fresh_store_gets_the_authoring_directories() {
-        let root = isolated("fresh");
-        let cfg = Config::isolated(root.clone());
-        cfg.ensure_dirs().unwrap();
-        for d in [cfg.assets(), cfg.intake(), cfg.watch(), cfg.trash()] {
-            assert!(d.is_dir(), "{} missing", d.display());
+        let cfg = Config::parse("").unwrap();
+        if std::env::var("CURIO_BIND").is_err() {
+            assert_eq!(cfg.bind, "127.0.0.1");
         }
-        std::fs::remove_dir_all(&root).unwrap();
-    }
-
-    #[test]
-    fn a_server_store_does_not_regrow_chore_directories() {
-        // A droplet rsyncs assets/ up and never keeps or bins anything. Empty intake/, watch/ and
-        // trash/ would just be clutter suggesting work that happens elsewhere.
-        let root = isolated("server");
-        std::fs::create_dir_all(root.join("assets")).unwrap();
-        let cfg = Config::isolated(root.clone());
-        cfg.ensure_dirs().unwrap();
-        assert!(cfg.assets().is_dir());
-        for d in [cfg.intake(), cfg.watch(), cfg.trash()] {
-            assert!(!d.exists(), "{} should not have been created", d.display());
+        if std::env::var("CURIO_PORT").is_err() {
+            assert_eq!(cfg.port, 19463);
         }
-        std::fs::remove_dir_all(&root).unwrap();
-    }
-}
-
-#[cfg(test)]
-mod discovery_tests {
-    use super::*;
-
-    fn tree(name: &str) -> PathBuf {
-        let p = std::env::temp_dir().join(format!("curio-disc-{}-{}", name, std::process::id()));
-        let _ = std::fs::remove_dir_all(&p);
-        p
+        assert!(cfg.stores.is_empty());
     }
 
     #[test]
-    fn finds_a_store_from_a_subdirectory() {
-        let root = tree("sub");
-        std::fs::create_dir_all(root.join("project/assets")).unwrap();
-        std::fs::create_dir_all(root.join("project/deep/deeper")).unwrap();
-        assert_eq!(Config::discover(&root.join("project/deep/deeper")),
-            Some(root.join("project").canonicalize().unwrap()));
-        std::fs::remove_dir_all(&root).unwrap();
-    }
-
-    #[test]
-    fn finds_the_conventional_data_subdirectory() {
-        // the layout this repo uses: the store is a data/ inside the project
-        let root = tree("nested");
-        std::fs::create_dir_all(root.join("proj/data/assets")).unwrap();
-        std::fs::create_dir_all(root.join("proj/src")).unwrap();
-        assert_eq!(Config::discover(&root.join("proj/src")),
-            Some(root.join("proj/data").canonicalize().unwrap()));
-        std::fs::remove_dir_all(&root).unwrap();
-    }
-
-    #[test]
-    fn a_synced_store_is_recognised_by_its_manifest() {
-        let root = tree("manifest");
-        std::fs::create_dir_all(root.join("proj")).unwrap();
-        std::fs::write(root.join("proj/manifest.tsv"), "").unwrap();
-        assert_eq!(Config::discover(&root.join("proj")),
-            Some(root.join("proj").canonicalize().unwrap()));
-        std::fs::remove_dir_all(&root).unwrap();
-    }
-
-    #[test]
-    fn nowhere_near_a_store_finds_nothing() {
-        let root = tree("none");
-        std::fs::create_dir_all(root.join("empty/deeper")).unwrap();
-        // /tmp has no assets/ above it, so this must not invent one
-        let found = Config::discover(&root.join("empty/deeper"));
-        assert!(found.is_none() || !found.unwrap().starts_with(&root),
-            "invented a store where there is none");
-        std::fs::remove_dir_all(&root).unwrap();
+    fn mistakes_are_refused_rather_than_guessed_at() {
+        let twice = "[[store]]\nname = \"a\"\nurl = \"http://x\"\n[[store]]\nname = \"a\"\nurl = \"http://y\"\n";
+        assert!(Config::parse(twice).is_err(), "a duplicate name");
+        assert!(Config::parse("[[store]]\nname = \"A b\"\nurl = \"http://x\"\n").is_err(), "a name needing escapes");
+        assert!(Config::parse("[[store]]\nname = \"a\"\nurl = \"x:7077\"\n").is_err(), "a url with no scheme");
+        assert!(Config::parse("[[store]]\nname = \"a\"\nurl = \"http://x\"\nwrite_tokn = \"w\"\n").is_err(),
+            "a misspelt key must not silently leave a store read-only");
     }
 }

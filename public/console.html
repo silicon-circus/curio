@@ -1,189 +1,973 @@
 <!doctype html>
+<html lang="en">
+<head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>curio</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='3.5' y='3.5' width='9' height='9' rx='1.5' transform='rotate(45 8 8)' fill='%231f5f59'/%3E%3C/svg%3E">
 <style>
-  :root{--bg:#0b0d13;--ink:#c9cedb;--dim:#6f7789;--hi:#9fd0ff;--acc:#36ff9e;--panel:#12141f;--line:#242938}
-  *{box-sizing:border-box}
-  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
-    font:12.5px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-  header{display:flex;align-items:center;gap:14px;padding:9px 14px;background:var(--panel);
-    border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
-  header b{color:#eaf0ff;letter-spacing:2px}
-  .tab{padding:3px 12px;border:1px solid #252b3c;border-radius:4px;color:var(--dim);cursor:pointer}
-  .tab.on{background:#1d2740;color:#eaf0ff;border-color:#33406a}
-  .grow{flex:1}
-  #stat{color:var(--dim)} #stat b{color:var(--hi)}
-  main{padding:14px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
-  .card{background:#171b28;border:1px solid #252b3c;border-radius:6px;overflow:hidden;
-    display:flex;flex-direction:column}
-  .card img,.card video{width:100%;height:150px;object-fit:contain;background:#0e111a;display:block}
-  .card .none{height:150px;background:#0e111a;display:flex;align-items:center;justify-content:center;
-    color:#46506b;font-size:30px}
-  .card .body{padding:7px 8px;display:flex;flex-direction:column;gap:6px}
-  .card input{background:#0e111a;border:1px solid #252b3c;color:var(--ink);border-radius:4px;
-    padding:4px 6px;font:inherit;width:100%}
-  .card .meta{color:var(--dim);font-size:11px}
-  .row{display:flex;gap:6px}
-  button{background:#1d2740;border:1px solid #33406a;color:#dfe6f8;border-radius:4px;padding:4px 10px;
-    cursor:pointer;font:inherit}
-  button:hover{background:#26355a}
-  button.bin{background:transparent;border-color:#4a2b34;color:#c98b96}
-  button.bin:hover{background:#2a1a20}
-  table{width:100%;border-collapse:collapse}
-  td{padding:3px 8px 3px 0;border-bottom:1px solid #1a1e2b;vertical-align:middle}
-  td.n{color:#eaf0ff} td.u a{color:var(--hi);text-decoration:none} td.u a:hover{text-decoration:underline}
-  td.s{color:var(--dim);text-align:right;white-space:nowrap}
-  #q{background:#0e111a;border:1px solid #252b3c;color:var(--ink);border-radius:4px;padding:4px 8px;
-    font:inherit;width:280px}
-  pre{background:#0e111a;border:1px solid #1a1e2b;border-radius:5px;padding:9px;color:var(--dim);
-    max-height:230px;overflow:auto;margin:0}
-  .note{color:var(--dim)}
-  .empty{color:var(--dim);padding:26px 0}
+/* curio's console. Compiled into the binary; no fonts, scripts or images from anywhere else.
+ *
+ * One colour is reserved: red means update mode, and nothing else in the console is red. */
+:root {
+  --board: #dcdfd8;      /* the drawer: cool archival board, quiet enough for the art to lead */
+  --paper: #f5f6f2;      /* label stock */
+  --sunk:  #cfd3cb;
+  --ink:   #1b201e;
+  --mute:  #626c67;
+  --rule:  #b8beb6;
+  --teal:  #1f5f59;      /* selection and focus */
+  --teal-soft: #c3d6d1;
+  --amber: #b97a0c;      /* flagged */
+  --red:   #d3261e;      /* update mode, and only update mode */
+  --red-ink: #fff;
+  --check-a: #e9ebe6;
+  --check-b: #d6dad3;
+  --shadow: 0 1px 0 rgba(27,32,30,.08), 0 8px 24px -12px rgba(27,32,30,.25);
+
+  --display: "URW Gothic", "Century Gothic", "Avant Garde", "Futura", sans-serif;
+  --body: system-ui, "Adwaita Sans", Cantarell, "Segoe UI", sans-serif;
+  --mono: "Adwaita Mono", ui-monospace, "DejaVu Sans Mono", "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --board: #141716; --paper: #1d2120; --sunk: #101312; --ink: #e2e6e1; --mute: #8d9792;
+    --rule: #2f3533; --teal: #63b4aa; --teal-soft: #22403c; --amber: #e0a53a;
+    --red: #ef4136; --check-a: #232826; --check-b: #1a1e1d;
+    --shadow: 0 1px 0 rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--board); color: var(--ink);
+  font: 14px/1.45 var(--body);
+  display: grid; grid-template-rows: auto auto 1fr; overflow: hidden;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.mono { font-family: var(--mono); font-size: 12.5px; }
+.mute { color: var(--mute); }
+[hidden] { display: none !important; }
+
+/* ── the tent's edge: only there in update mode ─────────────────────────────────────── */
+.tent {
+  height: 0; overflow: hidden; transition: height .25s ease;
+  background: repeating-linear-gradient(-45deg, var(--red) 0 14px, #fff 14px 28px);
+}
+body.updating .tent { height: 8px; animation: march 1.2s linear infinite; background-size: 40px 40px; }
+@keyframes march { to { background-position: 40px 0; } }
+@media (prefers-reduced-motion: reduce) { body.updating .tent { animation: none; } .tent { transition: none; } }
+
+/* ── top bar ───────────────────────────────────────────────────────────────────────── */
+header {
+  display: flex; align-items: center; gap: 18px; padding: 10px 18px;
+  background: var(--paper); border-bottom: 1px solid var(--rule);
+}
+.mark { font: 600 22px/1 var(--display); letter-spacing: -.01em; margin: 0; }
+.mark span { color: var(--mute); font-weight: 400; }
+.storepick select {
+  font: 600 15px var(--display); background: var(--board); border: 1px solid var(--rule);
+  border-radius: 6px; padding: 5px 8px;
+}
+.types { display: flex; gap: 2px; flex: 1; overflow-x: auto; scrollbar-width: thin; }
+.types button {
+  border: 0; background: none; padding: 6px 12px; border-radius: 6px; white-space: nowrap;
+  font: 500 15px var(--display);
+}
+.types button:hover { background: var(--board); }
+.types button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.types .n { font: 12px var(--mono); opacity: .65; margin-left: 6px; }
+
+/* ── the switch ────────────────────────────────────────────────────────────────────── */
+.switch {
+  display: flex; align-items: center; gap: 10px; border: 2px solid var(--red); background: none;
+  border-radius: 999px; padding: 4px 6px 4px 14px; font: 700 12px var(--display);
+  letter-spacing: .08em; text-transform: uppercase; color: var(--red); min-width: 196px;
+  justify-content: space-between;
+}
+.switch .knob {
+  width: 46px; height: 24px; border-radius: 999px; background: var(--sunk); position: relative;
+  border: 1px solid var(--rule); flex: none;
+}
+.switch .knob::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--paper); box-shadow: 0 1px 2px rgba(0,0,0,.35); transition: left .15s ease;
+}
+.switch[aria-checked="true"] { background: var(--red); color: var(--red-ink); }
+.switch[aria-checked="true"] .knob { background: #fff3; border-color: #fff6; }
+.switch[aria-checked="true"] .knob::after { left: 24px; }
+.switch:disabled { opacity: .45; cursor: not-allowed; }
+.switch .fuse { display: block; height: 2px; margin-top: 3px; background: currentColor; transform-origin: left; }
+.switch .label { display: flex; flex-direction: column; text-align: left; }
+.switch .left { font: 600 11px var(--mono); letter-spacing: 0; text-transform: none; opacity: .85; }
+
+/* ── the three columns ─────────────────────────────────────────────────────────────── */
+main { display: grid; grid-template-columns: 250px 1fr; min-height: 0; }
+main.detailed { grid-template-columns: 250px 1fr 400px; }
+
+aside.filters { overflow-y: auto; padding: 16px 14px 24px; border-right: 1px solid var(--rule); }
+.eyebrow {
+  font: 700 11px var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--mute);
+  margin: 0 0 8px;
+}
+.keyed { font-size: 12.5px; margin: 0 0 14px; color: var(--mute); }
+.keyed b { font: 600 12px var(--mono); color: var(--ink); }
+.group { border-top: 1px solid var(--rule); }
+.group > button {
+  width: 100%; display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  border: 0; background: none; padding: 8px 2px; text-align: left; font: 600 12.5px var(--mono);
+}
+.group > button::before { content: "▸"; color: var(--mute); margin-right: 4px; transition: transform .12s; display: inline-block; }
+.group.open > button::before { transform: rotate(90deg); }
+.group > button .k { flex: 1; }
+.group > button .n { font-weight: 400; color: var(--mute); }
+.group.trait > button .k::after { content: " · key"; color: var(--teal); font-weight: 400; }
+.values { list-style: none; margin: 0 0 8px; padding: 0; }
+.values button {
+  width: 100%; display: flex; justify-content: space-between; gap: 8px; text-align: left;
+  border: 0; border-radius: 4px; padding: 3px 6px; font: 12.5px var(--mono);
+  /* the bar behind each value is its share of the type: structure that says something true */
+  background: linear-gradient(90deg, var(--teal-soft) var(--share), transparent var(--share));
+}
+.values button:hover { outline: 1px solid var(--rule); }
+.values button[aria-pressed="true"] { background: var(--teal); color: var(--paper); }
+.values .v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.values .more { font: 12px var(--body); color: var(--mute); padding: 2px 6px; }
+
+.health { margin-top: 22px; border-top: 1px solid var(--rule); padding-top: 12px; }
+.health button.plain { margin-right: 6px; }
+.report { font-size: 12.5px; margin-top: 8px; }
+
+/* ── the grid ──────────────────────────────────────────────────────────────────────── */
+section.drawer { overflow-y: auto; padding: 14px 18px 40px; min-width: 0; }
+.status { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; min-height: 28px; }
+.status .count { font: 600 14px var(--display); }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--teal); color: var(--teal);
+  background: var(--paper); border-radius: 999px; padding: 2px 4px 2px 10px; font: 12px var(--mono);
+}
+.chip button { border: 0; background: none; color: inherit; padding: 0 5px; font-size: 14px; line-height: 1; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 14px; }
+.card {
+  background: var(--paper); border-radius: 8px; overflow: hidden; position: relative;
+  border: 1px solid var(--rule); box-shadow: var(--shadow);
+}
+.card:hover { border-color: var(--mute); }
+.card.current { border-color: var(--teal); box-shadow: 0 0 0 2px var(--teal); }
+.card > .hit {
+  display: flex; flex-direction: column; width: 100%; border: 0; background: none; padding: 0;
+  text-align: left; border-radius: 0;
+}
+.well {
+  aspect-ratio: 1; display: grid; place-items: center; overflow: hidden;
+  background: repeating-conic-gradient(var(--check-a) 0 25%, var(--check-b) 0 50%) 0 0 / 16px 16px;
+}
+.well img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+.well .glyph { font: 600 34px var(--display); color: var(--mute); }
+.well.missing { background: var(--sunk); }
+.well.missing::after { content: "no object"; font: 11px var(--mono); color: var(--mute); }
+.cap { padding: 7px 9px 8px; display: grid; gap: 1px; }
+/* Two full lines, and the name is cut in the MIDDLE to fit them (see fitCaptions): names that share a
+ * long prefix differ at the end, which is exactly what a trailing ellipsis hides. */
+.cap .t { font: 12px/1.35 var(--mono); word-break: break-all; height: 2.7em; overflow: hidden; }
+.cap .s { font-size: 11.5px; color: var(--mute); display: flex; gap: 8px; }
+.card .flag {
+  position: absolute; top: 8px; left: 8px; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--amber); box-shadow: 0 0 0 2px var(--paper);
+}
+.card .play {
+  position: absolute; right: 8px; top: 8px; width: 34px; height: 34px; border-radius: 50%;
+  border: 0; background: var(--ink); color: var(--paper); font-size: 13px;
+}
+.card .play[aria-pressed="true"] { background: var(--teal); }
+.pager { display: flex; gap: 10px; align-items: center; font-size: 13px; }
+.pageno { width: 5em; padding: 3px 6px; border: 1px solid var(--rule); border-radius: 6px; background: var(--paper); font: 13px var(--mono); }
+.foot { margin-top: 18px; display: flex; justify-content: center; }
+.empty { padding: 48px 0; color: var(--mute); max-width: 46ch; }
+.empty b { color: var(--ink); }
+
+/* ── the detail panel ──────────────────────────────────────────────────────────────── */
+aside.detail { overflow-y: auto; background: var(--paper); border-left: 1px solid var(--rule); padding: 0 0 32px; }
+.detail .preview {
+  min-height: 220px; display: grid; place-items: center; padding: 14px;
+  background: repeating-conic-gradient(var(--check-a) 0 25%, var(--check-b) 0 50%) 0 0 / 16px 16px;
+  border-bottom: 1px solid var(--rule); position: relative;
+}
+.detail .preview img { max-width: 100%; max-height: 52vh; display: block; }
+.detail .preview video { max-width: 100%; max-height: 52vh; }
+.detail .preview audio { width: 100%; }
+.detail .preview pre { white-space: pre-wrap; max-height: 40vh; overflow: auto; margin: 0; width: 100%; font: 12.5px/1.5 var(--mono); }
+.detail .close {
+  position: absolute; top: 8px; right: 8px; border: 0; width: 30px; height: 30px; border-radius: 50%;
+  background: var(--paper); box-shadow: var(--shadow); font-size: 16px;
+}
+.detail .body { padding: 14px 16px; display: grid; gap: 16px; }
+.detail h2 { font: 600 17px/1.25 var(--display); margin: 0; overflow-wrap: anywhere; }
+.detail .sub { font-size: 12.5px; color: var(--mute); margin-top: 3px; }
+.links { display: flex; gap: 14px; font-size: 12.5px; }
+.links a { color: var(--teal); }
+table.tags { width: 100%; border-collapse: collapse; font: 12.5px var(--mono); }
+table.tags td { padding: 4px 6px; border-top: 1px solid var(--rule); vertical-align: middle; }
+table.tags td.k { color: var(--mute); width: 38%; overflow-wrap: anywhere; }
+table.tags td.v { overflow-wrap: anywhere; }
+table.tags td.x { width: 1%; white-space: nowrap; text-align: right; }
+table.tags input { width: 100%; font: 12.5px var(--mono); padding: 3px 5px; border: 1px solid var(--rule); border-radius: 4px; background: var(--board); }
+.badge { font: 600 10px var(--body); letter-spacing: .06em; text-transform: uppercase; border-radius: 3px; padding: 1px 5px; margin-left: 6px; }
+.badge.custom { background: var(--amber); color: #fff; }
+dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; margin: 0; font-size: 12.5px; }
+dl.facts dt { color: var(--mute); }
+dl.facts dd { margin: 0; font-family: var(--mono); overflow-wrap: anywhere; }
+details.gen summary { cursor: pointer; font-size: 12.5px; color: var(--mute); }
+details.gen pre { font: 12px/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0 0; }
+.desc { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+textarea { width: 100%; min-height: 88px; border: 1px solid var(--rule); border-radius: 6px; padding: 6px 8px; background: var(--board); resize: vertical; }
+.stars { display: inline-flex; gap: 2px; }
+.stars button { border: 0; background: none; padding: 0 1px; font-size: 18px; line-height: 1; color: var(--rule); }
+.stars button.on { color: var(--amber); }
+.stars button:disabled { cursor: default; }
+.row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+button.plain {
+  border: 1px solid var(--rule); background: var(--board); border-radius: 6px; padding: 4px 10px; font-size: 12.5px;
+}
+button.plain:hover { border-color: var(--mute); }
+button.go { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+button.danger { color: var(--red); border-color: var(--red); background: none; }
+button.danger:hover { background: var(--red); color: #fff; }
+button.tiny { border: 0; background: none; color: var(--mute); padding: 0 4px; font-size: 12px; }
+button.tiny:hover { color: var(--ink); }
+.note { font-size: 12.5px; color: var(--mute); border-left: 3px solid var(--rule); padding-left: 8px; }
+.note.red { border-color: var(--red); color: var(--ink); }
+
+/* ── messages ──────────────────────────────────────────────────────────────────────── */
+#toasts { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); display: grid; gap: 8px; z-index: 10; }
+.toast {
+  background: var(--ink); color: var(--paper); border-radius: 8px; padding: 9px 14px; font-size: 13px;
+  box-shadow: var(--shadow); max-width: min(560px, 90vw);
+}
+.toast.bad { background: var(--red); color: #fff; }
+
+/* ── narrow screens: filters fold away, the detail panel covers the grid ──────────── */
+.filtertoggle { display: none; }
+@media (max-width: 900px) {
+  header { flex-wrap: wrap; gap: 10px; padding: 10px 12px; }
+  .types { order: 3; flex-basis: 100%; }
+  .switch { margin-left: auto; min-width: 0; }
+  main, main.detailed { grid-template-columns: 1fr; }
+  aside.filters { display: none; position: fixed; inset: 0 30% 0 0; background: var(--board); z-index: 5; box-shadow: var(--shadow); }
+  body.showfilters aside.filters { display: block; }
+  .filtertoggle { display: inline-block; }
+  aside.detail { position: fixed; inset: 0; z-index: 6; }
+  section.drawer { padding: 12px; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+}
 </style>
-
+</head>
+<body>
+<div class="tent" aria-hidden="true"></div>
 <header>
-  <b>CURIO</b>
-  <span class="tab on" data-t="intake">intake</span>
-  <span class="tab" data-t="serve">serving</span>
-  <span class="tab" data-t="watch">watch</span>
-  <span class="grow"></span>
-  <span id="stat"></span>
-  <button id="sync">sync</button>
+  <h1 class="mark">curio <span>· DataDungeon</span></h1>
+  <label class="storepick"><span hidden>Store</span><select id="store"></select></label>
+  <nav class="types" id="types" aria-label="Asset types"></nav>
+  <button class="switch" id="switch" role="switch" aria-checked="false" disabled>
+    <span class="label"><span id="switchword">Update mode off</span><span class="left" id="left"></span><span class="fuse" id="fuse" hidden></span></span>
+    <span class="knob" aria-hidden="true"></span>
+  </button>
 </header>
-<main id="main"></main>
+<main id="main">
+  <aside class="filters" id="filters" aria-label="Filters"></aside>
+  <section class="drawer" id="drawer" aria-live="polite"></section>
+  <aside class="detail" id="detail" hidden aria-label="Asset"></aside>
+</main>
+<div id="toasts" role="status"></div>
 
-<script type="module">
-const $ = (t, p = {}, kids = []) => {
-  const n = Object.assign(document.createElement(t), p);
-  for (const k of [].concat(kids)) n.append(k);
-  return n;
+<script>
+"use strict";
+/* Everything the console knows comes from /api, which is curio passing a DataDungeon store's own
+ * answers through. No type or tag name appears in this file: they are read from the store, because
+ * every store has different ones and they get renamed. */
+
+const PAGE = 60;
+const state = {
+  stores: [], store: null, types: [], type: null, filters: {}, keys: {},
+  assets: [], total: 0, page: 0, selected: null, record: null,
+  key: null, idle: 600, deadline: 0, editing: null,
 };
-const kb = b => b > 1e6 ? (b/1e6).toFixed(1) + " MB" : (b/1024).toFixed(0) + " kB";
-const main = document.getElementById("main");
-let tab = "intake";
 
-const IMG = /\.(webp|png|jpe?g|gif|svg|avif)$/i, VID = /\.(mp4|webm|mov)$/i, AUD = /\.(wav|mp3|ogg|flac)$/i;
+// ── small helpers ──────────────────────────────────────────────────────────────────────────────
 
-async function stat(){
-  const h = await (await fetch("/health")).json();
-  document.getElementById("stat").innerHTML =
-    `serving <b>${h.serving}</b> · intake <b>${h.intake}</b> · watch <b>${h.watch}</b> · held <b>${h.held}</b>`;
-}
-
-// ── intake: the one chore ───────────────────────────────────────────────────
-async function drawIntake(){
-  const { items } = await (await fetch("/api/intake")).json();
-  main.innerHTML = "";
-  if(!items.length){ main.append($("p", { className:"empty" },
-    "intake is empty. Drop files in data/watch/ to file them automatically, or data/intake/ to look at them here.")); return; }
-  const g = $("div", { className:"grid" });
-  for(const it of items){
-    const c = $("div", { className:"card" });
-    if(IMG.test(it.file))      c.append($("img", { src: it.url, loading:"lazy" }));
-    else if(VID.test(it.file)) c.append($("video", { src: it.url, controls:true }));
-    else if(AUD.test(it.file)) c.append($("div", { className:"none" }, "♪"));
-    else                       c.append($("div", { className:"none" }, "▦"));
-    const name = $("input", { value: it.file.replace(/\//g, "."), spellcheck:false });
-    const keep = $("button", {}, "keep");
-    const bin  = $("button", { className:"bin" }, "bin");
-    keep.onclick = async () => {
-      const r = await (await fetch("/api/keep", { method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ file: it.file, name: name.value }) })).json();
-      if(!r.ok) return alert(r.why);
-      c.remove(); stat();
-    };
-    bin.onclick = async () => {
-      await fetch("/api/trash", { method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ file: it.file }) });
-      c.remove(); stat();
-    };
-    c.append($("div", { className:"body" }, [
-      name,
-      $("div", { className:"meta" }, kb(it.size)),
-      $("div", { className:"row" }, [keep, bin]),
-    ]));
-    g.append(c);
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k === "style") el.style.cssText = v;
+    else if (k in el && k !== "list") el[k] = v;
+    else el.setAttribute(k, v === true ? "" : v);
   }
-  main.append(g);
+  for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid);
+  return el;
+}
+const $ = (id) => document.getElementById(id);
+const fill = (el, ...kids) => el.replaceChildren(...kids.flat().filter((k) => k != null && k !== false));
+const enc = encodeURIComponent;
+const S = () => `/api/stores/${enc(state.store)}`;
+
+function toast(text, bad) {
+  const t = h("div", { className: "toast" + (bad ? " bad" : "") }, text);
+  $("toasts").append(t);
+  setTimeout(() => t.remove(), bad ? 7000 : 3500);
 }
 
-// ── serving: what has a name ────────────────────────────────────────────────
-let q = "";
-async function drawServe(){
-  main.innerHTML = "";
-  const box = $("input", { id:"q", value:q, placeholder:"filter by name…", spellcheck:false });
-  main.append($("div", { style:"margin-bottom:10px" }, box));
-  const host = $("div"); main.append(host);
-  const load = async () => {
-    const r = await (await fetch("/api/serve?limit=400&q=" + encodeURIComponent(q))).json();
-    host.innerHTML = "";
-    host.append($("p", { className:"note" },
-      `${r.total} name${r.total===1?"":"s"}${r.total > r.items.length ? ` (showing ${r.items.length})` : ""} · add ?w=640 to any URL for a resize`));
-    const t = $("table");
-    for(const it of r.items){
-      const un = $("button", { className:"bin" }, "unpublish");
-      un.onclick = async () => {
-        if(!confirm("stop serving " + it.name + "?\n\nThe bytes stay in the store; only the name goes.")) return;
-        await fetch("/api/unpublish", { method:"POST", headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({ name: it.name }) });
-        tr.remove(); stat();
-      };
-      const tr = $("tr", {}, [
-        $("td", { className:"n" }, it.name),
-        $("td", { className:"u" }, $("a", { href: it.url, target:"_blank" }, it.url)),
-        $("td", { className:"s" }, kb(it.size)),
-        $("td", { className:"s" }, un),
-      ]);
-      t.append(tr);
-    }
-    host.append(t);
-  };
-  let timer = null;
-  box.oninput = () => { q = box.value; clearTimeout(timer); timer = setTimeout(load, 130); };
-  await load();
-  box.focus();
-}
-
-// ── watch: what filed itself ────────────────────────────────────────────────
-async function drawWatch(){
-  const { items } = await (await fetch("/api/watch")).json();
-  main.innerHTML = "";
-  main.append($("p", { className:"note" },
-    "Drop things in data/watch/ named the way you want them served — a folder keeps its shape as a collection, a file is one asset. Nothing is filed until you run it, so you can put something in and go away."));
-  if(!items.length){ main.append($("p", { className:"empty" }, "watch/ is empty")); return; }
-  const t = $("table");
-  for(const i of items){
-    const tag = { collection: ["COLLECTION", "#9fd0ff"], single: ["FILE", "#c9cedb"], held: ["HELD", "#c98b96"] }[i.kind];
-    t.append($("tr", {}, [
-      $("td", { className:"s", style:`text-align:left;color:${tag[1]};width:96px` }, tag[0]),
-      $("td", { className:"n" }, i.name + (i.kind === "collection" ? "/" : "")),
-      $("td", { className:"s", style:"text-align:left;color:#6f7789" },
-        i.why || (i.files > 1 ? `${i.files} files, ${kb(i.bytes)}` : kb(i.bytes))),
-    ]));
+async function api(path, opts = {}) {
+  const headers = { ...(opts.headers || {}) };
+  if (state.key) headers["X-Curio-Update"] = state.key;
+  if (opts.body) headers["Content-Type"] = "application/json";
+  let res;
+  try {
+    res = await fetch(path, { ...opts, headers, body: opts.body && JSON.stringify(opts.body) });
+  } catch (e) {
+    throw new Error("curio is not answering. Is it still running?");
   }
-  main.append(t);
-  main.append($("p", { className:"note", style:"margin-top:12px" },
-    "This is a plan, not a log. Run "), $("code", { style:"color:#36ff9e" }, "just watch"),
-    $("span", { className:"note" }, " to be shown it again in the terminal and asked to confirm."));
+  if (state.key && res.status !== 423) state.deadline = Date.now() + state.idle * 1000;
+  const body = await res.json().catch(() => ({}));
+  if (res.status === 423) goLocked();
+  if (!res.ok) throw new Error(body.error || `${res.status} ${res.statusText}`);
+  return body;
 }
 
-const draw = () => ({ intake: drawIntake, serve: drawServe, watch: drawWatch })[tab]();
-
-for(const el of document.querySelectorAll(".tab")){
-  el.onclick = () => {
-    document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x === el));
-    tab = el.dataset.t; draw();
-  };
+/* What to call an asset. DataDungeon gives assets no names, so: its description; else its pool key,
+ * which for a registered type reads like a name (art.boardwalk.experiments); else its tags. An
+ * unregistered type's pool key can be an opaque hash, which names nothing a person would recognise. */
+function caption(a, tags = a.tags) {
+  if (a.description) return a.description;
+  if (a.pool_key && !/^[0-9a-f]{24,}$/.test(a.pool_key)) return a.pool_key;
+  const t = sortedTags(tags || {});
+  return t.length ? t.map(([k, v]) => `${k}=${v}`).join(" ") : `#${a.id}`;
 }
-document.getElementById("sync").onclick = async e => {
-  e.target.textContent = "syncing…";
-  const r = await (await fetch("/api/sync", { method:"POST" })).json();
-  e.target.textContent = "sync";
-  alert(`unchanged ${r.unchanged}\nedited ${r.edited}\nadded ${r.added}\nremoved ${r.removed}\nrenamed ${r.renamed}\nambiguous ${r.ambiguous}\nversions kept ${r.archived}`);
-  stat(); draw();
-};
-stat(); draw();
-setInterval(() => { stat(); if(tab !== "serve") draw(); }, 4000);
+// Fit every caption into its two lines by cutting from the middle, keeping a little of the start
+// and as much of the end as fits. The caption's font is monospaced, so one measurement is enough.
+function fitCaptions() {
+  const all = document.querySelectorAll(".cap .t");
+  if (!all.length) return;
+  const probe = h("span", { className: "t", style: "position:absolute; visibility:hidden; height:auto; white-space:pre" }, "0".repeat(40));
+  all[0].parentNode.append(probe);
+  const perLine = Math.max(6, Math.floor(all[0].clientWidth / (probe.getBoundingClientRect().width / 40)));
+  probe.remove();
+  for (const el of all) el.textContent = middle(el.dataset.full, perLine * 2);
+}
+function middle(text, max) {
+  if (text.length <= max) return text;
+  const head = Math.max(4, Math.floor((max - 1) * 0.3));
+  return text.slice(0, head) + "…" + text.slice(text.length - (max - 1 - head));
+}
+let refit;
+window.addEventListener("resize", () => { clearTimeout(refit); refit = setTimeout(fitCaptions, 120); });
+function glyph(a) {
+  return { audio: "♪", video: "▶", text: "¶" }[a.media] || "◇";
+}
+function isRaster(ct) { return /^image\/(png|jpeg|webp|gif)/.test(ct || ""); }
+function thumbURL(a, px) {
+  const w = Math.min(1024, Math.ceil(px * (window.devicePixelRatio || 1)));
+  return `${S()}/assets/${a.id}/thumb/${a.file_hash}?w=${w}`;
+}
+function objectURL(a, download) {
+  return `${S()}/assets/${a.id}/object${download ? "?download=1" : ""}`;
+}
+function writable() {
+  const s = state.stores.find((s) => s.name === state.store);
+  return !!(s && s.writable);
+}
+function updating() { return !!state.key && writable(); }
+
+// ── where we are, kept in the URL so a reload comes back to it (but never in update mode) ─────
+
+function saveHash() {
+  const p = new URLSearchParams();
+  if (state.store) p.set("store", state.store);
+  if (state.type) p.set("type", state.type);
+  for (const [k, v] of Object.entries(state.filters)) p.set("tag." + k, v);
+  if (state.page) p.set("page", state.page + 1);
+  if (state.selected) p.set("id", state.selected);
+  history.replaceState(null, "", "#" + p.toString());
+}
+function readHash() {
+  const p = new URLSearchParams(location.hash.slice(1));
+  const filters = {};
+  for (const [k, v] of p) if (k.startsWith("tag.")) filters[k.slice(4)] = v;
+  return { store: p.get("store"), type: p.get("type"), filters, id: Number(p.get("id")) || null,
+           page: Math.max(0, (Number(p.get("page")) || 1) - 1) };
+}
+
+// ── stores and types ───────────────────────────────────────────────────────────────────────────
+
+async function start() {
+  let got;
+  try { got = await api("/api/stores"); }
+  catch (e) { fill($("drawer"), h("p", { className: "empty" }, e.message)); return; }
+  state.stores = got.stores;
+  state.idle = got.idle_seconds;
+  const want = readHash();
+  if (!state.stores.length) {
+    fill($("drawer"), h("div", { className: "empty" },
+      h("p", null, h("b", null, "No stores yet. "), "curio shows the DataDungeon stores listed in its config."),
+      h("p", null, "Add a ", h("code", null, "[[store]]"), " with a name and url to ",
+        h("code", null, "~/.config/curio/curio.toml"), ", then restart curio. Run ",
+        h("code", null, "curio --stores"), " to check each one answers.")));
+    return;
+  }
+  const sel = $("store");
+  fill(sel, ...state.stores.map((s) => h("option", { value: s.name }, s.name + (s.writable ? "" : " · read-only"))));
+  sel.addEventListener("change", () => openStore(sel.value, {}));
+  $("switch").disabled = !state.stores.some((s) => s.writable);
+  if ($("switch").disabled) $("switch").title = "No store in curio's config has a write token.";
+  const first = state.stores.some((s) => s.name === want.store) ? want.store : state.stores[0].name;
+  await openStore(first, want);
+}
+
+async function openStore(name, want) {
+  state.store = name;
+  $("store").value = name;
+  state.type = null; state.types = [];
+  closeDetail(true);
+  renderSwitch();
+  try {
+    state.types = await api(`${S()}/types`);
+  } catch (e) {
+    fill($("types"));
+    fill($("filters"));
+    fill($("drawer"), h("div", { className: "empty" },
+      h("p", null, h("b", null, `${name} isn't answering. `), e.message),
+      h("p", null, "Check the store is running, then ", h("button", { className: "plain", onclick: () => openStore(name, want) }, "try again"), ".")));
+    return;
+  }
+  renderTypes();
+  const chosen = state.types.find((t) => t.name === want.type)
+    || state.types.find((t) => t.count > 0) || state.types[0];
+  if (!chosen) {
+    fill($("filters"));
+    fill($("drawer"), h("p", { className: "empty" }, `${name} has no assets yet.`));
+    return;
+  }
+  await openType(chosen.name, want.filters || {}, want.id, want.page);
+}
+
+function renderTypes() {
+  fill($("types"), ...state.types.map((t) =>
+    h("button", { "aria-pressed": String(t.name === state.type), onclick: () => openType(t.name, {}) },
+      t.name, h("span", { className: "n" }, t.count))));
+}
+
+async function openType(name, filters, id, page) {
+  state.type = name;
+  state.filters = { ...filters };
+  state.keys = {};
+  renderTypes();
+  closeDetail(true);
+  await Promise.all([loadKeys(), loadAssets(page || 0)]);
+  if (id) select(id);
+  saveHash();
+}
+
+// ── filters ────────────────────────────────────────────────────────────────────────────────────
+
+function registration() {
+  const t = state.types.find((t) => t.name === state.type);
+  return t && t.registration;
+}
+
+async function loadKeys() {
+  let counts = {};
+  try { counts = await api(`${S()}/types/${enc(state.type)}/tags`); }
+  catch (e) { toast(e.message, true); }
+  const reg = registration();
+  const traits = (reg && reg.pool_traits) || [];
+  // A registered type's key traits first, in the order that makes its key; then the rest.
+  const names = [...traits.filter((k) => k in counts), ...Object.keys(counts).filter((k) => !traits.includes(k)).sort()];
+  const box = $("filters");
+  fill(box, 
+    h("button", { className: "plain filtertoggle", onclick: () => document.body.classList.remove("showfilters") }, "Close"),
+    h("p", { className: "eyebrow" }, "Filter by tag"),
+    traits.length ? h("p", { className: "keyed" }, "Keyed by ", ...traits.flatMap((t, i) => [i ? " · " : "", h("b", null, t)])) : null,
+    ...names.map((k) => group(k, counts[k], traits.includes(k))),
+    names.length ? null : h("p", { className: "mute" }, `No ${state.type} carries a tag.`),
+    health());
+  // Open the groups already filtered on, and the first few, so the column is useful at a glance.
+  for (const [i, k] of names.entries()) if (k in state.filters || i < 3) toggleGroup(k, true);
+}
+
+function group(key, count, trait) {
+  return h("div", { className: "group" + (trait ? " trait" : ""), "data-key": key },
+    h("button", { "aria-expanded": "false", onclick: () => toggleGroup(key) },
+      h("span", { className: "k" }, key), h("span", { className: "n" }, count)),
+    h("ul", { className: "values", hidden: true }));
+}
+
+async function toggleGroup(key, open) {
+  const g = [...document.querySelectorAll(".group")].find((g) => g.dataset.key === key);
+  if (!g) return;
+  const list = g.querySelector(".values");
+  const willOpen = open ?? list.hidden;
+  g.classList.toggle("open", willOpen);
+  g.firstChild.setAttribute("aria-expanded", String(willOpen));
+  list.hidden = !willOpen;
+  if (!willOpen || state.keys[key]) return renderValues(key);
+  try { state.keys[key] = await api(`${S()}/types/${enc(state.type)}/tags/${enc(key)}?limit=100`); }
+  catch (e) { toast(e.message, true); state.keys[key] = {}; }
+  renderValues(key);
+}
+
+function renderValues(key) {
+  const g = [...document.querySelectorAll(".group")].find((g) => g.dataset.key === key);
+  const vals = state.keys[key];
+  if (!g || !vals) return;
+  const max = Math.max(1, ...Object.values(vals));
+  const entries = Object.entries(vals);
+  fill(g.querySelector(".values"), 
+    ...entries.map(([v, n]) => h("li", null,
+      h("button", {
+        "aria-pressed": String(state.filters[key] === v),
+        style: `--share:${Math.round((n / max) * 100)}%`,
+        title: `${key}=${v}`,
+        onclick: () => setFilter(key, state.filters[key] === v ? null : v),
+      }, h("span", { className: "v" }, v), h("span", null, n)))),
+    entries.length >= 100 ? h("li", { className: "more" }, "The 100 most common values.") : null);
+}
+
+function setFilter(key, value) {
+  if (value == null) delete state.filters[key]; else state.filters[key] = value;
+  for (const k of Object.keys(state.keys)) renderValues(k);
+  closeDetail(true);
+  loadAssets(0);
+}
+
+function clearFilters() {
+  state.filters = {};
+  setFilter("", null);
+}
+
+function health() {
+  const out = h("div", { className: "report" });
+  const box = h("div", { className: "health" },
+    h("p", { className: "eyebrow" }, "Store health"),
+    h("div", { className: "row" },
+      h("button", { className: "plain", onclick: () => check(out) }, "Check store"),
+      updating() ? h("button", { className: "plain danger", onclick: () => cleanUp(out) }, "Clean up…") : null),
+    out);
+  return box;
+}
+
+async function check(out) {
+  out.textContent = "Checking…";
+  try { showReport(out, await api(`${S()}/check`, { method: "POST" }), false); }
+  catch (e) { out.textContent = e.message; }
+}
+
+function showReport(out, r, acted) {
+  const missing = r.missing_objects.length, orphans = r.orphan_objects.length;
+  fill(out, 
+    !missing && !orphans ? h("p", null, "Every asset has its object, and every object belongs to an asset.") : null,
+    missing ? h("p", null, `${missing} asset${missing === 1 ? " has" : "s have"} no object${acted ? " — removed" : ""}: `,
+      h("span", { className: "mono" }, r.missing_objects.slice(0, 12).map((a) => "#" + a.id).join(" ") + (missing > 12 ? " …" : ""))) : null,
+    orphans ? h("p", null, `${orphans} object${orphans === 1 ? "" : "s"} belong${orphans === 1 ? "s" : ""} to no asset${acted ? " — deleted" : ""}.`) : null);
+}
+
+async function cleanUp(out) {
+  const rows = confirm(`Clean up ${state.store}?\n\nOK removes assets whose object is missing, and deletes objects no asset uses. This can't be undone.`);
+  if (!rows) return;
+  out.textContent = "Cleaning up…";
+  try {
+    showReport(out, await api(`${S()}/vacuum`, { method: "POST", body: { delete_missing_rows: true, delete_orphan_objects: true } }), true);
+    toast(`Cleaned up ${state.store}.`);
+    loadAssets(state.page);
+  } catch (e) { out.textContent = e.message; }
+}
+
+// ── the grid ───────────────────────────────────────────────────────────────────────────────────
+
+/* PAGES, NOT AN ENDLESS SCROLL. A store can hold far more than a browser wants in one grid, and a
+ * page number is somewhere you can come back to: it is in the URL. */
+async function loadAssets(page) {
+  const q = new URLSearchParams({ type: state.type, limit: PAGE, offset: page * PAGE });
+  for (const [k, v] of Object.entries(state.filters)) q.set("tag." + k, v);
+  let got;
+  try { got = await api(`${S()}/assets?${q}`); }
+  catch (e) { fill($("drawer"), h("p", { className: "empty" }, e.message)); return; }
+  // Past the end — an old URL, or the last asset on the last page deleted: show the last real page.
+  if (!got.assets.length && got.total > 0 && page > 0) return loadAssets(Math.floor((got.total - 1) / PAGE));
+  state.page = page;
+  state.total = got.total;
+  state.assets = got.assets.map((x) => ({ ...x.asset, tags: x.tags }));
+  renderDrawer();
+  $("drawer").scrollTop = 0;
+  saveHash();
+}
+
+function pages() { return Math.max(1, Math.ceil(state.total / PAGE)); }
+
+function pager() {
+  const n = pages();
+  if (n <= 1) return null;
+  const go = (p) => { if (p >= 0 && p < n && p !== state.page) loadAssets(p); };
+  return h("nav", { className: "pager", "aria-label": "Pages" },
+    h("button", { className: "plain", disabled: state.page === 0, onclick: () => go(state.page - 1) }, "← Previous"),
+    h("label", null, "Page ",
+      h("input", { className: "pageno", type: "number", min: 1, max: n, value: state.page + 1,
+        onchange: (e) => go(Math.min(n, Math.max(1, Math.round(Number(e.target.value) || 1))) - 1) }),
+      ` of ${n}`),
+    h("button", { className: "plain", disabled: state.page >= n - 1, onclick: () => go(state.page + 1) }, "Next →"));
+}
+
+function renderDrawer() {
+  const chips = Object.entries(state.filters).map(([k, v]) =>
+    h("span", { className: "chip" }, `${k}=${v}`,
+      h("button", { "aria-label": `Remove ${k}=${v}`, onclick: () => setFilter(k, null) }, "×")));
+  const first = state.page * PAGE + 1, last = state.page * PAGE + state.assets.length;
+  const status = h("div", { className: "status" },
+    h("button", { className: "plain filtertoggle", onclick: () => document.body.classList.add("showfilters") }, "Filters"),
+    h("span", { className: "count" }, `${state.total} ${state.type}`),
+    pages() > 1 ? h("span", { className: "mute" }, `showing ${first}–${last}`) : null,
+    ...chips,
+    chips.length > 1 ? h("button", { className: "tiny", onclick: clearFilters }, "clear all") : null,
+    h("span", { style: "flex:1" }),
+    pager());
+  if (!state.assets.length) {
+    fill($("drawer"), status, h("p", { className: "empty" },
+      chips.length ? "Nothing carries all of these tags. Remove one to widen the search." : `${state.store} has no ${state.type}.`));
+    return;
+  }
+  const grid = h("div", { className: "grid" }, ...state.assets.map(card));
+  fill($("drawer"), status, grid, h("div", { className: "foot" }, pager()));
+  fitCaptions();
+}
+
+function card(a) {
+  let well;
+  if (isRaster(a.content_type) && a.file_hash) {
+    well = h("div", { className: "well" }, h("img", {
+      src: thumbURL(a, 180), alt: "", loading: "lazy", decoding: "async",
+      onerror: (e) => { e.target.remove(); well.classList.add("missing"); },
+    }));
+  } else if (/^image\//.test(a.content_type)) {
+    well = h("div", { className: "well" }, h("img", {
+      src: objectURL(a), alt: "", loading: "lazy",
+      onerror: (e) => { e.target.remove(); well.classList.add("missing"); },
+    }));
+  } else {
+    well = h("div", { className: "well" }, h("span", { className: "glyph" }, glyph(a)));
+  }
+  const current = a.id === state.selected;
+  const el = h("div", { className: "card" + (current ? " current" : ""), "data-id": a.id },
+    h("button", { className: "hit", "aria-current": String(current), title: caption(a), onclick: () => select(a.id) },
+      well,
+      h("span", { className: "cap" },
+        h("span", { className: "t", "data-full": caption(a) }, caption(a)),
+        h("span", { className: "s" }, h("span", null, "#" + a.id), a.rating ? h("span", null, "★".repeat(a.rating)) : null))),
+    a.flagged ? h("span", { className: "flag", title: "Flagged" }) : null);
+  if (a.media === "audio") {
+    const play = h("button", { className: "play", "aria-label": `Play #${a.id}`, "aria-pressed": "false" }, "▶");
+    play.addEventListener("click", () => playInCard(a, play));
+    el.append(play);
+  }
+  return el;
+}
+
+const player = new Audio();
+let playing = null;
+function playInCard(a, btn) {
+  if (playing === btn && !player.paused) { player.pause(); return; }
+  if (playing) { playing.setAttribute("aria-pressed", "false"); playing.textContent = "▶"; }
+  playing = btn;
+  player.src = objectURL(a);
+  player.play().catch((e) => toast(`Can't play #${a.id}: ${e.message}`, true));
+  btn.setAttribute("aria-pressed", "true"); btn.textContent = "❚❚";
+}
+player.addEventListener("pause", () => { if (playing) { playing.setAttribute("aria-pressed", "false"); playing.textContent = "▶"; } });
+player.addEventListener("ended", () => { if (playing) { playing.setAttribute("aria-pressed", "false"); playing.textContent = "▶"; } });
+
+// ── one asset ──────────────────────────────────────────────────────────────────────────────────
+
+async function select(id) {
+  state.selected = id;
+  markCurrent(id);
+  if ($("detail").hidden) { $("main").classList.add("detailed"); $("detail").hidden = false; fitCaptions(); }
+  saveHash();
+  try { state.record = await api(`${S()}/assets/${id}`); }
+  catch (e) { fill($("detail"), h("p", { className: "body" }, e.message)); return; }
+  state.editing = null;
+  renderDetail();
+}
+
+function closeDetail(quiet) {
+  state.selected = null; state.record = null; state.editing = null;
+  if (!$("detail").hidden) { $("main").classList.remove("detailed"); $("detail").hidden = true; fitCaptions(); }
+  markCurrent(null);
+  if (!quiet) saveHash();
+}
+
+function markCurrent(id) {
+  for (const c of document.querySelectorAll(".card")) {
+    const on = Number(c.dataset.id) === id;
+    c.classList.toggle("current", on);
+    c.querySelector(".hit").setAttribute("aria-current", String(on));
+  }
+}
+
+function preview(a) {
+  if (/^image\//.test(a.content_type)) {
+    const src = isRaster(a.content_type) && a.file_hash ? thumbURL(a, 380) : objectURL(a);
+    return h("img", { src, alt: caption(a, state.record.tags), onerror: (e) => e.target.replaceWith(h("p", { className: "mute" }, "The store has no object for this asset.")) });
+  }
+  if (a.media === "audio") return h("audio", { controls: true, preload: "metadata", src: objectURL(a) });
+  if (a.media === "video") return h("video", { controls: true, preload: "metadata", src: objectURL(a) });
+  if (a.media === "text" || /^(text\/|application\/json)/.test(a.content_type)) {
+    const pre = h("pre", null, "Loading…");
+    fetch(objectURL(a)).then((r) => r.ok ? r.text() : Promise.reject(new Error("The store has no object for this asset.")))
+      .then((t) => { pre.textContent = t.length > 200000 ? t.slice(0, 200000) + "\n…" : t; })
+      .catch((e) => { pre.textContent = e.message; });
+    return pre;
+  }
+  return h("span", { className: "glyph", style: "font: 600 48px var(--display); color: var(--mute)" }, glyph(a));
+}
+
+function renderDetail() {
+  const { asset: a, tags, custom, meta } = state.record;
+  const ed = state.editing;
+  const canEdit = updating();
+
+  const tagRows = ed
+    ? ed.rows.map(([k, v], i) => h("tr", null,
+        h("td", { className: "k" }, h("input", { value: k, "aria-label": "Tag name", oninput: (e) => { ed.rows[i][0] = e.target.value; } })),
+        h("td", { className: "v" }, h("input", { value: v, "aria-label": `Value of ${k}`, oninput: (e) => { ed.rows[i][1] = e.target.value; } })),
+        h("td", { className: "x" }, h("button", { className: "tiny", "aria-label": `Remove ${k}`, onclick: () => { ed.rows.splice(i, 1); renderDetail(); } }, "×"))))
+    : sortedTags(tags).map(([k, v]) => h("tr", null,
+        h("td", { className: "k" }, k),
+        h("td", { className: "v" }, v, custom.includes(k) ? h("span", { className: "badge custom", title: "A value outside the type's usual choices" }, "custom") : null),
+        h("td", { className: "x" }, canEdit && custom.includes(k)
+          ? h("button", { className: "plain", title: `Treat ${k}=${v} as a standard value for every ${a.asset_type}`, onclick: () => promote(k, v) }, "Make standard") : null)));
+
+  const facts = [
+    ["type", a.asset_type], ["media", a.content_type],
+    meta && meta.width ? ["size", `${meta.width} × ${meta.height}`] : null,
+    meta && meta.duration_ms ? ["length", `${(meta.duration_ms / 1000).toFixed(1)} s`] : null,
+    ["pool key", a.pool_key], ["pool", a.pool ? "yes, interchangeable" : null],
+    ["hash", a.file_hash], ["object", a.file_path],
+    ["created", a.created_at], ["last used", a.last_used_at], ["uses", a.use_count || null],
+    ["generated", a.generated ? (a.generator || "yes") : null],
+    ["permanent", a.permanent ? "yes" : null],
+  ].filter((f) => f && f[1] != null && f[1] !== "");
+
+  const body = h("div", { className: "body" },
+    h("div", null,
+      h("h2", null, caption(a, tags)),
+      h("div", { className: "sub" }, `#${a.id} · ${a.asset_type} · ${state.store}`),
+    ),
+    h("div", { className: "links" },
+      h("a", { href: objectURL(a), target: "_blank", rel: "noopener" }, "Open original"),
+      h("a", { href: objectURL(a, true) }, "Download")),
+    !writable() ? h("p", { className: "note" }, `${state.store} is read-only here: curio's config gives it no write token.`)
+      : !canEdit ? h("p", { className: "note" }, "Turn on update mode to change this asset.") : null,
+
+    h("div", null,
+      h("p", { className: "eyebrow" }, "Tags"),
+      h("table", { className: "tags" }, h("tbody", null, ...tagRows,
+        ed ? h("tr", null, h("td", { colSpan: 3 }, h("button", { className: "tiny", onclick: () => { ed.rows.push(["", ""]); renderDetail(); } }, "+ add a tag"))) : null)),
+      !ed && !Object.keys(tags).length ? h("p", { className: "mute" }, "No tags.") : null),
+
+    h("div", null,
+      h("p", { className: "eyebrow" }, "Description"),
+      ed ? h("textarea", { value: ed.description, "aria-label": "Description", oninput: (e) => { ed.description = e.target.value; } })
+         : a.description ? h("p", { className: "desc" }, a.description) : h("p", { className: "mute" }, "None.")),
+
+    h("div", { className: "row" },
+      h("span", { className: "eyebrow", style: "margin:0" }, "Rating"),
+      stars(ed ? ed.rating : a.rating, canEdit, (n) => { if (ed) { ed.rating = n; renderDetail(); } else quick({ rating: n }); }),
+      h("span", { className: "eyebrow", style: "margin:0 0 0 12px" }, "Flag"),
+      h("button", {
+        className: "plain", disabled: !canEdit, "aria-pressed": String(ed ? ed.flagged : a.flagged),
+        onclick: () => { if (ed) { ed.flagged = !ed.flagged; renderDetail(); } else quick({ flagged: !a.flagged }); },
+      }, (ed ? ed.flagged : a.flagged) ? "⚑ Flagged" : "Not flagged")),
+
+    canEdit ? h("div", { className: "row" },
+      ed ? [h("button", { className: "plain go", onclick: save }, "Save changes"),
+            h("button", { className: "plain", onclick: () => { state.editing = null; renderDetail(); } }, "Cancel")]
+         : h("button", { className: "plain", onclick: edit }, "Edit tags and description"),
+      h("span", { style: "flex:1" }),
+      h("button", { className: "plain danger", onclick: remove }, "Delete asset")) : null,
+
+    h("div", null, h("p", { className: "eyebrow" }, "Record"),
+      h("dl", { className: "facts" }, ...facts.flatMap(([k, v]) => [h("dt", null, k), h("dd", null, String(v))]))),
+    a.generation ? h("details", { className: "gen" }, h("summary", null, "How it was generated"), h("pre", null, pretty(a.generation))) : null,
+  );
+
+  fill($("detail"), 
+    h("div", { className: "preview" }, preview(a),
+      h("button", { className: "close", "aria-label": "Close", onclick: () => closeDetail() }, "×")),
+    body);
+}
+
+// A registered type's key traits first, in key order, then the rest — the same order everywhere,
+// so a row being edited is where it was when it was read.
+function sortedTags(tags) {
+  const reg = registration();
+  const traits = (reg && reg.pool_traits) || [];
+  const order = (k) => { const i = traits.indexOf(k); return i < 0 ? 999 : i; };
+  return Object.entries(tags).sort(([x], [y]) => order(x) - order(y) || x.localeCompare(y));
+}
+function pretty(s) { try { return JSON.stringify(JSON.parse(s), null, 2); } catch { return s; } }
+
+function stars(n, live, set) {
+  return h("span", { className: "stars", role: "group", "aria-label": n ? `Rated ${n} of 5` : "Unrated" },
+    ...[1, 2, 3, 4, 5].map((i) => h("button", {
+      className: i <= (n || 0) ? "on" : "", disabled: !live, "aria-label": `${i} star${i > 1 ? "s" : ""}`,
+      onclick: () => set(i),
+    }, "★")));
+}
+
+function edit() {
+  const { asset: a, tags } = state.record;
+  state.editing = { rows: sortedTags(tags), description: a.description || "", rating: a.rating, flagged: a.flagged };
+  renderDetail();
+}
+
+async function patch(body, done) {
+  const id = state.record.asset.id;
+  try {
+    const out = await api(`${S()}/assets/${id}`, { method: "PATCH", body });
+    state.record = { ...state.record, asset: out.asset, tags: out.tags };
+    const i = state.assets.findIndex((x) => x.id === id);
+    if (i >= 0) state.assets[i] = { ...out.asset, tags: out.tags };
+    state.editing = null;
+    state.record = await api(`${S()}/assets/${id}`);   // custom flags and metadata, as the store now has them
+    renderDetail(); renderDrawer();
+    toast(done);
+  } catch (e) { toast(e.message, true); }
+}
+
+function quick(body) {
+  patch(body, body.rating ? `Rated ${body.rating} of 5.` : body.flagged ? "Flagged." : "Unflagged.");
+}
+
+function save() {
+  const ed = state.editing, a = state.record.asset;
+  const rows = ed.rows.map(([k, v]) => [k.trim(), v.trim()]).filter(([k]) => k);
+  const tags = Object.fromEntries(rows);
+  if (rows.length !== Object.keys(tags).length) return toast("Two tags have the same name. Rename or remove one.", true);
+  const body = {};
+  if (JSON.stringify(tags) !== JSON.stringify(state.record.tags)) body.tags = tags;
+  if (ed.description !== (a.description || "")) body.description = ed.description;
+  if (ed.rating !== a.rating && ed.rating != null) body.rating = ed.rating;
+  if (ed.flagged !== a.flagged) body.flagged = ed.flagged;
+  if (!Object.keys(body).length) { state.editing = null; renderDetail(); return; }
+  patch(body, "Saved.");
+}
+
+async function promote(k, v) {
+  try {
+    const out = await api(`${S()}/types/${enc(state.type)}/promote`, { method: "POST", body: { trait: k, value: v } });
+    toast(`${k}=${v} is now a standard value (${out.promoted} tag${out.promoted === 1 ? "" : "s"}).`);
+    state.record = await api(`${S()}/assets/${state.record.asset.id}`);
+    renderDetail();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function remove() {
+  const a = state.record.asset;
+  if (!confirm(`Delete #${a.id} (${caption(a, state.record.tags)}) from ${state.store}?\n\nIts object is deleted too, unless another asset shares the same bytes. This can't be undone.`)) return;
+  try {
+    await api(`${S()}/assets/${a.id}`, { method: "DELETE" });
+    toast(`Deleted #${a.id}.`);
+    closeDetail();
+    state.types = await api(`${S()}/types`).catch(() => state.types);
+    renderTypes();
+    loadAssets(state.page);
+  } catch (e) { toast(e.message, true); }
+}
+
+// ── update mode ────────────────────────────────────────────────────────────────────────────────
+// The key lives in this variable and nowhere else, so reloading the page is turning the switch off.
+
+$("switch").addEventListener("click", async () => {
+  if (state.key) {
+    await fetch("/api/update", { method: "DELETE" }).catch(() => {});
+    goLocked();
+    return;
+  }
+  try {
+    const out = await api("/api/update", { method: "POST" });
+    state.key = out.key;
+    state.idle = out.idle_seconds;
+    state.deadline = Date.now() + state.idle * 1000;
+    afterSwitch();
+    if (!writable()) toast(`Update mode is on, but ${state.store} has no write token in curio's config, so it stays read-only.`);
+  } catch (e) { toast(e.message, true); }
+});
+
+function goLocked(why) {
+  const was = !!state.key;
+  state.key = null;
+  state.editing = null;
+  afterSwitch();
+  if (why && was) toast(why, true);
+}
+
+function afterSwitch() {
+  renderSwitch();
+  if (state.record) renderDetail();
+  if (state.type) {
+    const old = document.querySelector(".health");
+    if (old) old.replaceWith(health());
+  }
+}
+
+function renderSwitch() {
+  const on = !!state.key;
+  document.body.classList.toggle("updating", on && writable());
+  $("switch").setAttribute("aria-checked", String(on));
+  $("switchword").textContent = on ? "Update mode on" : "Update mode off";
+  $("fuse").hidden = !on;
+  tick();
+}
+
+function tick() {
+  if (!state.key) { $("left").textContent = ""; return; }
+  const left = Math.max(0, state.deadline - Date.now());
+  if (left === 0) return goLocked(`Update mode switched itself off after ${Math.round(state.idle / 60)} idle minutes.`);
+  const m = Math.floor(left / 60000), s = Math.floor((left % 60000) / 1000);
+  $("left").textContent = `off in ${m}:${String(s).padStart(2, "0")} if idle`;
+  $("fuse").style.transform = `scaleX(${left / (state.idle * 1000)})`;
+}
+setInterval(tick, 1000);
+
+// ── keys ───────────────────────────────────────────────────────────────────────────────────────
+
+document.addEventListener("keydown", (e) => {
+  if (e.target.closest("input, textarea, select")) return;
+  if (e.key === "Escape" && state.selected) { closeDetail(); return; }
+  if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && state.selected) {
+    e.preventDefault();
+    step(e.key === "ArrowRight" ? 1 : -1);
+  }
+});
+
+// The next asset, turning the page when this one is the last on it.
+async function step(by) {
+  const i = state.assets.findIndex((a) => a.id === state.selected);
+  let next = state.assets[i + by];
+  if (!next) {
+    const page = state.page + by;
+    if (page < 0 || page >= pages()) return;
+    await loadAssets(page);
+    next = by > 0 ? state.assets[0] : state.assets[state.assets.length - 1];
+    if (!next) return;
+  }
+  select(next.id);
+  document.querySelector(`.card[data-id="${next.id}"]`)?.scrollIntoView({ block: "nearest" });
+}
+
+start();
 </script>
+</body>
+</html>
