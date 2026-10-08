@@ -343,7 +343,9 @@ async function api(path, opts = {}) {
  * unregistered type's pool key can be an opaque hash, which names nothing a person would recognise. */
 function caption(a, tags = a.tags) {
   if (a.description) return a.description;
-  if (a.pool_key && !/^[0-9a-f]{24,}$/.test(a.pool_key)) return a.pool_key;
+  // A registered type's key starts with the type's own name, which the tab already says.
+  const key = a.pool_key && a.pool_key.startsWith(a.asset_type + ".") ? a.pool_key.slice(a.asset_type.length + 1) : a.pool_key;
+  if (key && !/^[0-9a-f]{24,}$/.test(key)) return key;
   const t = sortedTags(tags || {});
   return t.length ? t.map(([k, v]) => `${k}=${v}`).join(" ") : `#${a.id}`;
 }
