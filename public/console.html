@@ -199,7 +199,11 @@ section.drawer { display: flex; flex-direction: column; overflow: hidden; paddin
   flex: 1; min-height: 0; display: grid; place-items: center; overflow: hidden;
   background: repeating-conic-gradient(var(--check-a) 0 25%, var(--check-b) 0 50%) 0 0 / 16px 16px;
 }
-.well img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+/* Absolutely placed and centred, so the picture is held to the well's real size: a percentage
+ * max-height on its own doesn't hold inside a box whose height comes from flex, and tall pictures were
+ * cut off at the bottom. Never enlarged past its own size. */
+.well { position: relative; }
+.well img { position: absolute; inset: 0; margin: auto; max-width: 100%; max-height: 100%; display: block; }
 .well .glyph { font: 600 34px var(--display); color: var(--mute); }
 .well.missing { background: var(--sunk); }
 .well.solid { background: var(--sunk); }
@@ -799,12 +803,23 @@ function skeleton() {
 
 function fit() {
   skeleton();
-  const g = $("grid"), gap = narrow() ? 10 : 14, smallest = narrow() ? 120 : 160;
+  const g = $("grid"), gap = narrow() ? 10 : 14;
   const W = g.clientWidth, H = g.clientHeight;
-  const cols = Math.max(1, Math.floor((W + gap) / (smallest + gap)));
-  const cw = (W - gap * (cols - 1)) / cols;
   const cap = document.querySelector(".card .cap")?.offsetHeight || 66;
-  const rows = Math.max(1, Math.round((H + gap) / (cw * 0.85 + cap + gap)));
+  let cols, rows;
+  if (narrow()) {
+    cols = Math.max(1, Math.floor((W + gap) / (120 + gap)));
+    const cw = (W - gap * (cols - 1)) / cols;
+    rows = Math.max(1, Math.round((H + gap) / (cw * 0.85 + cap + gap)));
+  } else {
+    // BIG ENOUGH TO SEE (Thomas, 2026-10-10): at most four rows, no picture under 170 px tall, and
+    // as many columns as fit cards a little wider than their pictures are tall. A big screen gets
+    // bigger cards, not more of them.
+    rows = Math.min(4, Math.max(1, Math.floor((H + gap) / (cap + 170 + gap))));
+    const well = (H - gap * (rows - 1)) / rows - cap;
+    cols = Math.max(1, Math.round((W + gap) / (well / 0.85 + gap)));
+  }
+  const cw = (W - gap * (cols - 1)) / cols;
   return { cols, rows, cw, limit: Math.min(500, cols * rows) };
 }
 

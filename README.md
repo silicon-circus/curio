@@ -124,8 +124,9 @@ or a preview in the detail panel instead of a thumbnail.
 - **Filters** on the left are the type's tag names; a registered type's key traits come first, in key
   order. The bar behind each value is its share of the type. Filtering on several tags means all of
   them, and every filter, search and use filter shows as a chip above the grid.
-- **Pages** that each fit one screen, newest first: as many cards as the window holds, so the grid
-  never scrolls. The total is asked for once per search rather than on every page, because counting
+- **Pages** that each fit one screen, newest first, so the grid never scrolls: at most four rows of
+  cards big enough to see (no picture under 170 px tall), and as many columns as fit. A big screen
+  gets bigger cards, not more of them — 7 × 4 at 2560 × 1440. The total is asked for once per search rather than on every page, because counting
   reads every match. Resizing the window or opening the detail panel reshapes the page and keeps the
   selected asset in view. The page is in the URL, with the store, type, filters and the open asset,
   so a reload comes back to the same place — but never in update mode.
