@@ -170,6 +170,11 @@ pub async fn tag_values(
     read(&state, &name, &["types", &ty, "tags", &key], q.as_deref()).await
 }
 
+/// How many of a type's pictures are seen from each named direction.
+pub async fn views(State(state): St, Path((name, ty)): Path<(String, String)>, RawQuery(q): RawQuery) -> Response {
+    read(&state, &name, &["types", &ty, "views"], q.as_deref()).await
+}
+
 pub async fn assets(State(state): St, Path(name): Path<String>, RawQuery(q): RawQuery) -> Response {
     read(&state, &name, &["assets"], q.as_deref()).await
 }

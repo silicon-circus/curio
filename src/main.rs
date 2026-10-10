@@ -44,6 +44,7 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route(&format!("{s}/types/{{ty}}/tags"), get(routes::tag_keys))
         .route(&format!("{s}/types/{{ty}}/tags/{{key}}"), get(routes::tag_values))
         .route(&format!("{s}/types/{{ty}}/promote"), post(routes::promote))
+        .route(&format!("{s}/types/{{ty}}/views"), get(routes::views))
         .route(&format!("{s}/assets"), get(routes::assets))
         .route(&format!("{s}/assets/{{id}}"),
             get(routes::asset).patch(routes::update_asset).delete(routes::delete_asset))

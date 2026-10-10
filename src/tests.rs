@@ -41,6 +41,7 @@ async fn fake_dd(seen: Seen) -> String {
             match (req.method().as_str(), path.as_str()) {
                 ("GET", "/types") => json(r#"[{"name":"art","count":2,"registration":null}]"#),
                 ("GET", "/types/a%2Fb/tags") => json(r#"{"venue":2}"#),
+                ("GET", "/types/art/views") => json(r#"{"front":2}"#),
                 ("GET", "/assets") => json(r#"{"total":0,"limit":50,"offset":0,"assets":[]}"#),
                 ("GET", "/assets/1/object") => ([(header::CONTENT_TYPE, "image/png")], png()).into_response(),
                 ("GET", "/assets/2/object") =>
@@ -143,6 +144,9 @@ async fn names_from_the_store_go_back_as_one_segment() {
     let res = r.http.get(r.url("/api/stores/open/types/a%2Fb/tags")).send().await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
     assert_eq!(r.tokens_seen()[0].1, "/types/a%2Fb/tags");
+    let res = r.http.get(r.url("/api/stores/open/types/art/views?retired=include")).send().await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(r.tokens_seen()[0], (Method::GET, "/types/art/views?retired=include".to_string(), Some("READ".to_string())));
 }
 
 #[tokio::test]

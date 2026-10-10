@@ -202,6 +202,7 @@ section.drawer { display: flex; flex-direction: column; overflow: hidden; paddin
 .well img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
 .well .glyph { font: 600 34px var(--display); color: var(--mute); }
 .well.missing { background: var(--sunk); }
+.well.solid { background: var(--sunk); }
 .well.missing::after { content: "no object"; font: 11px var(--mono); color: var(--mute); }
 .cap { flex: none; padding: 7px 9px 8px; display: grid; gap: 1px; }
 /* Two full lines, and the name is cut in the MIDDLE to fit them (see fitCaptions): names that share a
@@ -329,7 +330,7 @@ button.tiny:hover { color: var(--ink); }
 const state = {
   stores: [], store: null, types: [], type: null, filters: {}, keys: {},
   assets: [], total: 0, page: 0, limit: 1, layout: null, selected: null, record: null,
-  q: "", uses: null, unused: false, retired: null, view: null, counted: null,
+  q: "", uses: null, unused: false, retired: null, view: null, viewCounts: {}, counted: null,
   key: null, idle: 600, deadline: 0, editing: null,
 };
 
@@ -538,6 +539,7 @@ function registration() {
 }
 
 async function loadKeys() {
+  loadViewCounts();
   const box = $("filters");
   const close = h("button", { className: "plain filtertoggle", onclick: () => document.body.classList.remove("showfilters") }, "Close");
   if (!state.type) {
@@ -628,9 +630,12 @@ function useFilters() {
     h("label", null, "Used by", by),
     h("label", null, h("input", { type: "checkbox", checked: state.unused, onchange: (e) => setUse(null, e.target.checked) }),
       "Used by nothing"),
-    h("label", null, "Seen", h("select", { "aria-label": "Seen from", onchange: (e) => setView(e.target.value || null) },
+    h("label", null, "Seen", h("select", { "aria-label": "Seen from", onchange: (e) => setView(e.target.value || null),
+      disabled: !state.view && !Object.keys(state.viewCounts).length,
+      title: Object.keys(state.viewCounts).length ? null : "No picture here has a view yet" },
       h("option", { value: "", selected: !state.view }, "from anywhere"),
-      ...DIRECTIONS.map((d) => h("option", { value: d, selected: state.view === d }, d)))),
+      ...DIRECTIONS.filter((d) => state.viewCounts[d] || state.view === d).map((d) =>
+        h("option", { value: d, selected: state.view === d }, `${d} (${state.viewCounts[d] || 0})`)))),
     h("label", null, "Show", h("select", { "aria-label": "Show retired", onchange: (e) => setRetired(e.target.value || null) },
       ...[["", "current"], ["only", "retired"], ["include", "current and retired"]].map(([v, label]) =>
         h("option", { value: v, selected: (state.retired || "") === v }, label)))));
@@ -651,6 +656,20 @@ const PRESETS = {
   "top-down": ["front", 0, 1], "bottom-up": ["front", 0, -1],
 };
 
+// Counts per named direction, for the type in view or summed over every type. Each word of a name
+// counts on its own (a "front from-above" picture counts under both), as the view= filter matches.
+async function loadViewCounts() {
+  const types = state.type ? [state.type] : state.types.map((t) => t.name);
+  const suffix = state.retired ? `?retired=${state.retired}` : "";
+  const counts = {};
+  await Promise.all(types.map(async (t) => {
+    const got = await api(`${S()}/types/${enc(t)}/views${suffix}`).catch(() => ({}));
+    for (const [d, n] of Object.entries(got)) counts[d] = (counts[d] || 0) + n;
+  }));
+  state.viewCounts = counts;
+  refreshUse();
+}
+
 function setView(view) {
   state.view = view;
   refreshUse();
@@ -662,7 +681,7 @@ function setRetired(retired) {
   state.retired = retired;
   state.keys = {};
   closeDetail(true);
-  if (state.type) loadKeys();
+  loadKeys();
   loadAssets(0);
 }
 
@@ -793,7 +812,7 @@ function fit() {
 async function loadAssets(page, keep) {
   const f = fit();
   if (keep != null) page = Math.floor(keep / f.limit);
-  const q = new URLSearchParams({ limit: f.limit, page: page + 1 });
+  const q = new URLSearchParams({ limit: f.limit, page: page + 1, meta: 1 });
   if (state.type) q.set("type", state.type);
   if (state.q) q.set("q", state.q);
   for (const [k, v] of Object.entries(state.filters)) q.set("tag." + k, v);
@@ -813,7 +832,7 @@ async function loadAssets(page, keep) {
   state.limit = f.limit;
   state.layout = f;
   if (got.total != null) { state.total = got.total; state.counted = asking; }
-  state.assets = got.assets.map((x) => ({ ...x.asset, tags: x.tags }));
+  state.assets = got.assets.map((x) => ({ ...x.asset, tags: x.tags, meta: x.meta, view: x.view }));
   renderDrawer();
   saveHash();
 }
@@ -893,11 +912,21 @@ function renderDrawer() {
 
 function card(a) {
   let well;
+  const m = a.meta || {};
+  // A picture that isn't a cut-out has nothing to show through, so it sits on its dominant colour —
+  // which is also what shows while its thumbnail loads. Unmeasured pictures keep the checkerboard.
+  const ground = (el) => {
+    if (m.transparent === false) {
+      el.classList.add("solid");
+      if (m.dominant_color) el.style.background = m.dominant_color;
+    }
+    return el;
+  };
   if (isRaster(a.content_type) && a.file_hash) {
-    well = h("div", { className: "well" }, h("img", {
+    well = ground(h("div", { className: "well" }, h("img", {
       src: thumbURL(a, state.layout ? state.layout.cw : 180), alt: "", decoding: "async",
       onerror: (e) => { e.target.remove(); well.classList.add("missing"); },
-    }));
+    })));
   } else if (/^image\//.test(a.content_type)) {
     well = h("div", { className: "well" }, h("img", {
       src: objectURL(a), alt: "",
@@ -914,6 +943,7 @@ function card(a) {
         h("span", { className: "t", "data-full": caption(a) }, caption(a)),
         h("span", { className: "s" }, h("span", null, "#" + a.id), state.type ? null : h("span", null, a.asset_type),
           a.retired_at ? h("span", null, "retired") : null,
+          a.view ? h("span", { title: "seen from" }, a.view.name) : null,
           a.rating ? h("span", null, "★".repeat(a.rating)) : null))),
     a.flagged ? h("span", { className: "flag", title: "Flagged" }) : null);
   if (a.media === "audio") {
@@ -1156,7 +1186,7 @@ function pictureEditor(record) {
     for (const [k, el] of [["anchor_x", ax], ["anchor_y", ay], ["world_width", ww], ["world_height", wh], ["world_depth", wd]])
       if (el.value !== "") image[k] = Number(el.value);
     if (!Object.keys(image).length) return toast("Nothing to save: fill in a view, light, anchor or size.", true);
-    patch({ image }, "Picture saved.");
+    patch({ image }, "Picture saved.").then(loadViewCounts);
   };
   return h("div", { className: "picedit" },
     view.row, light.row,

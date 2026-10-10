@@ -19,7 +19,7 @@ tagged `v0.3.2-server`.*
 | | |
 |---|---|
 | **Rust** stable (1.90+) | `cargo build --release`; the only build step |
-| a DataDungeon store, **0.11.1 or later** | reachable over its API: `dd-serve` beside a database, or an app that mounts `DataDungeon::API`. curio uses its search, links, paging, retiring and picture fields |
+| a DataDungeon store, **0.11.2 or later** | reachable over its API: `dd-serve` beside a database, or an app that mounts `DataDungeon::API`. curio uses its search, links, paging, retiring and picture fields |
 | `just` *(optional)* | remembers the commands; nothing requires it |
 
 ## Configuring stores
@@ -117,8 +117,10 @@ or a preview in the detail panel instead of a thumbnail.
   shown by name (`back-left from-above`) and in quarter turns. In update mode they can be set or
   corrected: a view or light from a preset, then fine-tuned; the anchor *at its foot* (the bottom centre
   of the visible pixels); the real width, height and depth in metres. *Seen* in the filters picks
-  pictures by view, across every type; *Measure pictures* in Store health fills in any not yet
-  measured.
+  pictures by view, across every type, and offers only the directions something is seen from, with
+  counts; *Measure pictures* in Store health fills in any not yet measured. On the cards, a cut-out
+  sits on the checkerboard and any other picture on its own dominant colour, which is also what shows
+  while its thumbnail loads; a picture with a view is labelled with it.
 - **Filters** on the left are the type's tag names; a registered type's key traits come first, in key
   order. The bar behind each value is its share of the type. Filtering on several tags means all of
   them, and every filter, search and use filter shows as a chip above the grid.
