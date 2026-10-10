@@ -364,32 +364,17 @@ async function api(path, opts = {}) {
   return body;
 }
 
-/* What to call an asset. DataDungeon gives assets no names, so: its description; else its pool key,
- * which for a registered type reads like a name (art.boardwalk.experiments); else its tags. An
- * unregistered type's pool key can be an opaque hash, which names nothing a person would recognise. */
+/* What to call an asset. DataDungeon gives assets no names, so: its description; else its tags, in
+ * its type's trait order — what its key says, built here rather than read from `pool_key`, which is
+ * an index DataDungeon is free to rename or move (deprecated in 0.12); else every tag as k=v. */
 function caption(a, tags = a.tags) {
   if (a.description) return a.description;
-  // A registered type's key starts with the type's own name, which the tab already says.
-  const key = a.pool_key && a.pool_key.startsWith(a.asset_type + ".") ? a.pool_key.slice(a.asset_type.length + 1) : a.pool_key;
-  if (key && !/^[0-9a-f]{24,}$/.test(key)) return key;
-  const t = sortedTags(tags || {});
-  return t.length ? t.map(([k, v]) => `${k}=${v}`).join(" ") : `#${a.id}`;
-}
-// Fit every caption into its two lines by cutting from the middle, keeping a little of the start
-// and as much of the end as fits. The caption's font is monospaced, so one measurement is enough.
-function fitCaptions() {
-  const all = document.querySelectorAll(".cap .t");
-  if (!all.length) return;
-  const probe = h("span", { className: "t", style: "position:absolute; visibility:hidden; height:auto; white-space:pre" }, "0".repeat(40));
-  all[0].parentNode.append(probe);
-  const perLine = Math.max(6, Math.floor(all[0].clientWidth / (probe.getBoundingClientRect().width / 40)));
-  probe.remove();
-  for (const el of all) el.textContent = middle(el.dataset.full, perLine * 2);
-}
-function middle(text, max) {
-  if (text.length <= max) return text;
-  const head = Math.max(4, Math.floor((max - 1) * 0.3));
-  return text.slice(0, head) + "…" + text.slice(text.length - (max - 1 - head));
+  tags = tags || {};
+  const t = state.types.find((t) => t.name === a.asset_type);
+  const traits = (t && t.registration && t.registration.pool_traits) || [];
+  if (traits.some((k) => tags[k])) return traits.map((k) => tags[k] ?? "").join(".");
+  const all = sortedTags(tags);
+  return all.length ? all.map(([k, v]) => `${k}=${v}`).join(" ") : `#${a.id}`;
 }
 function glyph(a) {
   return { audio: "♪", video: "▶", text: "¶" }[a.media] || "◇";
@@ -912,7 +897,7 @@ function renderDetail() {
     ["type", a.asset_type], ["media", a.content_type],
     meta && meta.width ? ["size", `${meta.width} × ${meta.height}`] : null,
     meta && meta.duration_ms ? ["length", `${(meta.duration_ms / 1000).toFixed(1)} s`] : null,
-    ["pool key", a.pool_key], ["pool", a.pool ? "yes, interchangeable" : null],
+    ["index key", a.pool_key], ["pool", a.pool ? "yes, interchangeable" : null],
     ["hash", a.file_hash], ["object", a.file_path],
     ["created", a.created_at], ["last used", a.last_used_at], ["uses", a.use_count || null],
     ["generated", a.generated ? (a.generator || "yes") : null],
