@@ -150,6 +150,15 @@ aside.filters { overflow-y: auto; padding: 16px 14px 24px; border-right: 1px sol
 .use label { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .use label > input[type=text] { flex: 1; min-width: 0; }
 .linkadd { margin-top: 6px; }
+.swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--rule); vertical-align: -2px; margin-right: 5px; }
+.picedit { display: grid; gap: 8px; margin-top: 8px; font-size: 12.5px; }
+.picedit .row { gap: 6px; }
+.picedit label { display: inline-flex; align-items: center; gap: 4px; }
+.picedit input[type=number], .picedit select {
+  font: 12.5px var(--mono); width: 5.2em; padding: 2px 4px; border: 1px solid var(--rule); border-radius: 4px; background: var(--board);
+}
+.picedit select { width: auto; }
+.picedit .what { width: 4.2em; color: var(--mute); }
 .linkadd input { width: 8.5em; }
 .linkadd input.to { flex: 1; min-width: 6em; }
 .health button.plain { margin-right: 6px; }
@@ -320,7 +329,7 @@ button.tiny:hover { color: var(--ink); }
 const state = {
   stores: [], store: null, types: [], type: null, filters: {}, keys: {},
   assets: [], total: 0, page: 0, limit: 1, layout: null, selected: null, record: null,
-  q: "", uses: null, unused: false, retired: null, counted: null,
+  q: "", uses: null, unused: false, retired: null, view: null, counted: null,
   key: null, idle: 600, deadline: 0, editing: null,
 };
 
@@ -378,6 +387,22 @@ function caption(a, tags = a.tags) {
   const all = sortedTags(tags);
   return all.length ? all.map(([k, v]) => `${k}=${v}`).join(" ") : `#${a.id}`;
 }
+// Fit every caption into its two lines by cutting from the middle, keeping a little of the start
+// and as much of the end as fits. The caption's font is monospaced, so one measurement is enough.
+function fitCaptions() {
+  const all = document.querySelectorAll(".cap .t");
+  if (!all.length) return;
+  const probe = h("span", { className: "t", style: "position:absolute; visibility:hidden; height:auto; white-space:pre" }, "0".repeat(40));
+  all[0].parentNode.append(probe);
+  const perLine = Math.max(6, Math.floor(all[0].clientWidth / (probe.getBoundingClientRect().width / 40)));
+  probe.remove();
+  for (const el of all) el.textContent = middle(el.dataset.full, perLine * 2);
+}
+function middle(text, max) {
+  if (text.length <= max) return text;
+  const head = Math.max(4, Math.floor((max - 1) * 0.3));
+  return text.slice(0, head) + "…" + text.slice(text.length - (max - 1 - head));
+}
 function glyph(a) {
   return { audio: "♪", video: "▶", text: "¶" }[a.media] || "◇";
 }
@@ -405,6 +430,7 @@ function saveHash() {
   if (state.uses) p.set("uses", state.uses);
   if (state.unused) p.set("unused", "1");
   if (state.retired) p.set("retired", state.retired);
+  if (state.view) p.set("view", state.view);
   for (const [k, v] of Object.entries(state.filters)) p.set("tag." + k, v);
   if (state.page) p.set("page", state.page + 1);
   if (state.selected) p.set("id", state.selected);
@@ -417,7 +443,8 @@ function readHash() {
   return { store: p.get("store"), type: p.get("type"), filters, id: Number(p.get("id")) || null,
            page: Math.max(0, (Number(p.get("page")) || 1) - 1),
            q: p.get("q") || "", uses: p.get("uses"), unused: p.get("unused") === "1",
-           retired: ["only", "include"].includes(p.get("retired")) ? p.get("retired") : null };
+           retired: ["only", "include"].includes(p.get("retired")) ? p.get("retired") : null,
+           view: p.get("view") };
 }
 
 // ── stores and types ───────────────────────────────────────────────────────────────────────────
@@ -452,6 +479,7 @@ async function openStore(name, want) {
   state.type = null; state.types = [];
   state.q = want.q || ""; $("q").value = state.q;
   state.uses = want.uses || null; state.unused = !!want.unused; state.retired = want.retired || null;
+  state.view = want.view || null;
   closeDetail(true);
   renderSwitch();
   try {
@@ -584,7 +612,7 @@ function setFilter(key, value) {
 function clearFilters() {
   state.filters = {};
   state.q = ""; $("q").value = "";
-  state.uses = null; state.unused = false; state.retired = null;
+  state.uses = null; state.unused = false; state.retired = null; state.view = null;
   refreshUse();
   setFilter("", null);
 }
@@ -600,6 +628,9 @@ function useFilters() {
     h("label", null, "Used by", by),
     h("label", null, h("input", { type: "checkbox", checked: state.unused, onchange: (e) => setUse(null, e.target.checked) }),
       "Used by nothing"),
+    h("label", null, "Seen", h("select", { "aria-label": "Seen from", onchange: (e) => setView(e.target.value || null) },
+      h("option", { value: "", selected: !state.view }, "from anywhere"),
+      ...DIRECTIONS.map((d) => h("option", { value: d, selected: state.view === d }, d)))),
     h("label", null, "Show", h("select", { "aria-label": "Show retired", onchange: (e) => setRetired(e.target.value || null) },
       ...[["", "current"], ["only", "retired"], ["include", "current and retired"]].map(([v, label]) =>
         h("option", { value: v, selected: (state.retired || "") === v }, label)))));
@@ -607,6 +638,26 @@ function useFilters() {
 
 /* RETIRED assets are hidden and kept: superseded by a newer take, or retired by hand as curation's
  * everyday soft delete. Listings and counts leave them out unless asked. */
+/* WHICH FACE OF A THING A PICTURE SHOWS. DataDungeon stores a view as a direction and names it by
+ * sector: eight around the thing, "from-above"/"from-below" past 22.5°, "top-down"/"bottom-up" near
+ * the poles. A name filters on its sector; the readable numbers are quarter turns (1 = 90°). */
+const AROUND = ["front", "front-right", "right", "back-right", "back", "back-left", "left", "front-left"];
+const DIRECTIONS = [...AROUND, "from-above", "from-below", "top-down", "bottom-up"];
+// The middle of each sector, as DataDungeon's readable form: side, yaw toward the thing's right on
+// either face, pitch up from level.
+const PRESETS = {
+  "front": ["front", 0, 0], "front-right": ["front", 0.5, 0], "right": ["front", 1, 0], "back-right": ["back", 0.5, 0],
+  "back": ["back", 0, 0], "back-left": ["back", -0.5, 0], "left": ["front", -1, 0], "front-left": ["front", -0.5, 0],
+  "top-down": ["front", 0, 1], "bottom-up": ["front", 0, -1],
+};
+
+function setView(view) {
+  state.view = view;
+  refreshUse();
+  closeDetail(true);
+  loadAssets(0);
+}
+
 function setRetired(retired) {
   state.retired = retired;
   state.keys = {};
@@ -653,7 +704,9 @@ function health() {
       h("button", { className: "plain", onclick: () => check(out) }, "Check store"),
       updating() ? h("button", { className: "plain danger", onclick: () => cleanUp(out) }, "Clean up…") : null,
       updating() && retiredHere() ? h("button", { className: "plain danger", onclick: () => prune(out) },
-        `Prune ${retiredHere()} retired…`) : null),
+        `Prune ${retiredHere()} retired…`) : null,
+      updating() ? h("button", { className: "plain", title: "Size, transparency, dominant colour and visible box, for pictures not yet measured",
+        onclick: () => measure(out) }, "Measure pictures") : null),
     out);
   return box;
 }
@@ -674,6 +727,15 @@ async function prune(out) {
     renderTypes();
     state.counted = null;
     loadAssets(state.page);
+  } catch (e) { out.textContent = e.message; }
+}
+
+async function measure(out) {
+  out.textContent = "Measuring…";
+  try {
+    const got = await api(`${S()}/measure`, { method: "POST", body: state.type ? { type: state.type } : {} });
+    out.textContent = `Measured ${got.measured} picture${got.measured === 1 ? "" : "s"}.`;
+    if (state.record) { state.record = await api(`${S()}/assets/${state.record.asset.id}`); renderDetail(); }
   } catch (e) { out.textContent = e.message; }
 }
 
@@ -738,6 +800,7 @@ async function loadAssets(page, keep) {
   if (state.uses) q.set("link.used-by", state.uses);
   if (state.unused) q.set("unlinked", "used-by");
   if (state.retired) q.set("retired", state.retired);
+  if (state.view) q.set("view", state.view);
   // A total reads every match, so it is asked for once per search, not on every page turn.
   const asking = state.store + "?" + q.toString().replace(/(^|&)(limit|page)=[^&]*/g, "");
   if (state.counted !== asking) q.set("count", 1);
@@ -806,6 +869,7 @@ function renderDrawer() {
     state.uses ? chip(`used by ${state.uses}`, () => setUse(null, false)) : null,
     state.unused ? chip("used by nothing", () => setUse(null, false)) : null,
     state.retired ? chip(state.retired === "only" ? "retired only" : "with retired", () => { setRetired(null); refreshUse(); }) : null,
+    state.view ? chip(`seen ${state.view}`, () => setView(null)) : null,
     ...Object.entries(state.filters).map(([k, v]) => chip(`${k}=${v}`, () => setFilter(k, null))),
   ].filter(Boolean);
   const first = state.page * state.limit + 1, last = state.page * state.limit + state.assets.length;
@@ -991,6 +1055,7 @@ function renderDetail() {
       h("button", { className: "plain danger", onclick: remove }, "Delete asset")) : null,
 
     linksSection(a, canEdit),
+    a.media === "image" ? pictureSection(state.record, canEdit) : null,
 
     h("div", null, h("p", { className: "eyebrow" }, "Record"),
       h("dl", { className: "facts" }, ...facts.flatMap(([k, v]) => [h("dt", null, k), h("dd", null, String(v))]))),
@@ -1033,6 +1098,71 @@ function linksSection(a, canEdit) {
     h("p", { className: "eyebrow" }, "Links"),
     rows.length ? h("table", { className: "tags" }, h("tbody", null, ...rows)) : h("p", { className: "mute" }, "No links."),
     canEdit ? linkAdder(a.id) : null);
+}
+
+/* WHAT THE PICTURE IS LIKE: real fields, as opposed to tags. DataDungeon measures some (size,
+ * transparency, dominant colour, the box around the visible pixels); the rest say how the picture was
+ * asked for — the view, the light, where it stands, how big the thing really is — and are set here,
+ * which is also where "as asked" gets corrected when the picture came out otherwise. */
+function pictureSection(record, canEdit) {
+  const m = record.meta || {};
+  const turn = (d) => d ? `${d.name}  (${d.side}, yaw ${num(d.yaw)}, pitch ${num(d.pitch)}${d.roll ? `, roll ${num(d.roll)}` : ""})` : null;
+  const rows = [
+    ["size", m.width ? `${m.width} × ${m.height} px` : null],
+    ["visible", m.content_w ? `${m.content_w} × ${m.content_h} px at ${m.content_x}, ${m.content_y}` : null],
+    ["transparent", m.transparent == null ? null : m.transparent ? "yes, a cut-out" : "no"],
+    ["colour", m.dominant_color ? h("span", null, h("span", { className: "swatch", style: `background:${m.dominant_color}` }), m.dominant_color) : null],
+    ["view", turn(record.view)],
+    ["light from", turn(record.light)],
+    ["anchor", m.anchor_x != null ? `${num(m.anchor_x)}, ${num(m.anchor_y)}` : null],
+    ["real size", [m.world_width, m.world_height, m.world_depth].some((v) => v != null)
+      ? `${[m.world_width, m.world_height, m.world_depth].map((v) => v == null ? "?" : num(v)).join(" × ")} m (w × h × d)` : null],
+  ].filter(([, v]) => v != null);
+  return h("div", null,
+    h("p", { className: "eyebrow" }, "Picture"),
+    rows.length ? h("dl", { className: "facts" }, ...rows.flatMap(([k, v]) => [h("dt", null, k), h("dd", null, v)]))
+      : h("p", { className: "mute" }, m.measured ? "Nothing recorded." : "Not measured yet. Store health can measure it."),
+    canEdit ? pictureEditor(record) : null);
+}
+
+function num(v) { return Number(v).toFixed(3).replace(/\.?0+$/, ""); }
+
+function pictureEditor(record) {
+  const m = record.meta || {};
+  const field = (value, step, label, min, max) => h("input", { type: "number", step, min, max, value: value ?? "", "aria-label": label });
+  const direction = (label, d) => {
+    const side = h("select", { "aria-label": `${label} side` }, ...["front", "back"].map((v) => h("option", { value: v, selected: (d?.side || "front") === v }, v)));
+    const yaw = field(d?.yaw, 0.125, `${label} yaw`, -1, 1), pitch = field(d?.pitch, 0.125, `${label} pitch`, -1, 1), roll = field(d?.roll, 0.125, `${label} roll`, -2, 2);
+    const preset = h("select", { "aria-label": `${label} preset`, onchange: (e) => {
+      const p = PRESETS[e.target.value]; if (!p) return;
+      side.value = p[0]; yaw.value = p[1]; pitch.value = p[2];
+    } }, h("option", { value: "" }, "preset…"), ...Object.keys(PRESETS).map((n) => h("option", { value: n }, n)));
+    const read = () => yaw.value === "" && pitch.value === "" ? null
+      : { side: side.value, yaw: Number(yaw.value || 0), pitch: Number(pitch.value || 0), roll: Number(roll.value || 0) };
+    return { read, row: h("div", { className: "row" }, h("span", { className: "what" }, label), preset, side,
+      h("label", null, "yaw", yaw), h("label", null, "pitch", pitch), h("label", null, "roll", roll)) };
+  };
+  const view = direction("view", record.view), light = direction("light", record.light);
+  const ax = field(m.anchor_x, 0.01, "anchor x", 0, 1), ay = field(m.anchor_y, 0.01, "anchor y", 0, 1);
+  const ww = field(m.world_width, 0.1, "real width", 0), wh = field(m.world_height, 0.1, "real height", 0), wd = field(m.world_depth, 0.1, "real depth", 0);
+  const foot = m.content_w ? h("button", { className: "tiny", title: "The bottom centre of the visible pixels",
+    onclick: () => { ax.value = num((m.content_x + m.content_w / 2) / m.width); ay.value = num((m.content_y + m.content_h) / m.height); } },
+    "at its foot") : null;
+  const save = async () => {
+    const image = {};
+    const v = view.read(), l = light.read();
+    if (v) image.view = v;
+    if (l) image.light = l;
+    for (const [k, el] of [["anchor_x", ax], ["anchor_y", ay], ["world_width", ww], ["world_height", wh], ["world_depth", wd]])
+      if (el.value !== "") image[k] = Number(el.value);
+    if (!Object.keys(image).length) return toast("Nothing to save: fill in a view, light, anchor or size.", true);
+    patch({ image }, "Picture saved.");
+  };
+  return h("div", { className: "picedit" },
+    view.row, light.row,
+    h("div", { className: "row" }, h("span", { className: "what" }, "anchor"), h("label", null, "x", ax), h("label", null, "y", ay), foot),
+    h("div", { className: "row" }, h("span", { className: "what" }, "real m"), h("label", null, "w", ww), h("label", null, "h", wh), h("label", null, "d", wd)),
+    h("div", { className: "row" }, h("button", { className: "plain go", onclick: save }, "Save picture")));
 }
 
 function linkAdder(id) {

@@ -51,6 +51,7 @@ async fn fake_dd(seen: Seen) -> String {
                 ("GET", "/assets/1/links") => json(r#"{"from":[],"to":[]}"#),
                 ("POST", "/assets/1/retire") | ("POST", "/assets/1/reinstate") => json(r#"{"asset":{"id":1}}"#),
                 ("POST", "/maintenance/prune") => json(r#"{"pruned":0}"#),
+                ("POST", "/maintenance/measure") => json(r#"{"measured":0}"#),
                 ("POST", "/assets/1/links") => json(r#"{"from":[]}"#),
                 ("DELETE", "/assets/1/links") => json(r#"{"removed":true}"#),
                 _ => (StatusCode::NOT_FOUND, r#"{"error":"No such endpoint"}"#).into_response(),
@@ -212,7 +213,8 @@ async fn retiring_reinstating_and_pruning_are_writes_like_any_other() {
     let r = Rig::new("retire").await;
     let calls = [("/api/stores/curated/assets/1/retire", "/assets/1/retire"),
                  ("/api/stores/curated/assets/1/reinstate", "/assets/1/reinstate"),
-                 ("/api/stores/curated/prune", "/maintenance/prune")];
+                 ("/api/stores/curated/prune", "/maintenance/prune"),
+                 ("/api/stores/curated/measure", "/maintenance/measure")];
     for (ours, _) in calls {
         let res = r.http.post(r.url(ours)).body("{}").send().await.unwrap();
         assert_eq!(res.status(), StatusCode::LOCKED, "{ours} with the switch off");

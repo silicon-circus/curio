@@ -387,6 +387,12 @@ pub async fn prune(State(state): St, Path(name): Path<String>, headers: HeaderMa
     write(&state, &name, &headers, Method::POST, &["maintenance", "prune"], None, Some(body)).await
 }
 
+/// `{type, all}`: have DataDungeon measure its pictures — size, transparency, dominant colour and the
+/// box around the visible pixels. A write, because it fills fields in the store.
+pub async fn measure(State(state): St, Path(name): Path<String>, headers: HeaderMap, body: Bytes) -> Response {
+    write(&state, &name, &headers, Method::POST, &["maintenance", "measure"], None, Some(body)).await
+}
+
 /// `{rel, name}` or `{rel, to}`: link this asset to a name (`used-by` boardwalk) or to another asset.
 pub async fn link(
     State(state): St,

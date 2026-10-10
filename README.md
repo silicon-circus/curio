@@ -19,7 +19,7 @@ tagged `v0.3.2-server`.*
 | | |
 |---|---|
 | **Rust** stable (1.90+) | `cargo build --release`; the only build step |
-| a DataDungeon store, **0.11 or later** | reachable over its API: `dd-serve` beside a database, or an app that mounts `DataDungeon::API`. curio uses its search, links, paging and retiring |
+| a DataDungeon store, **0.11.1 or later** | reachable over its API: `dd-serve` beside a database, or an app that mounts `DataDungeon::API`. curio uses its search, links, paging, retiring and picture fields |
 | `just` *(optional)* | remembers the commands; nothing requires it |
 
 ## Configuring stores
@@ -112,6 +112,13 @@ or a preview in the detail panel instead of a thumbnail.
   and whether to show current assets, retired ones, or both. Who uses an asset is a *link* in DataDungeon, not a tag, because it changes and
   one asset can have several users; the detail panel lists an asset's links both ways, and in update
   mode adds them (`used-by` a name, or `#id` for another asset) and removes them.
+- **Picture** in the detail panel: what DataDungeon measured (size, the box around the visible
+  pixels, transparency, dominant colour) and what was set (view, light, anchor, real size). Views are
+  shown by name (`back-left from-above`) and in quarter turns. In update mode they can be set or
+  corrected: a view or light from a preset, then fine-tuned; the anchor *at its foot* (the bottom centre
+  of the visible pixels); the real width, height and depth in metres. *Seen* in the filters picks
+  pictures by view, across every type; *Measure pictures* in Store health fills in any not yet
+  measured.
 - **Filters** on the left are the type's tag names; a registered type's key traits come first, in key
   order. The bar behind each value is its share of the type. Filtering on several tags means all of
   them, and every filter, search and use filter shows as a chip above the grid.
@@ -164,7 +171,7 @@ Everything under `/api/stores/<name>/` is that store's DataDungeon API, passed t
 | `GET` | `/api/stores` | the stores and whether each is writable — never a token |
 | `GET` `POST` `DELETE` | `/api/update` | update mode: status, on (returns the key), off |
 | `GET` | `…/types`, `…/types/:type/tags[/:key]` | types, tag names, a tag's values, with counts |
-| `GET` | `…/assets?type=&q=&tag.<k>=&link.<rel>=&unlinked=&retired=&limit=&page=&count=1` | a page of assets |
+| `GET` | `…/assets?type=&q=&tag.<k>=&link.<rel>=&unlinked=&retired=&view=&field.<f>=&limit=&page=&count=1` | a page of assets |
 | `GET` | `…/assets/:id`, `…/assets/:id/object` | an asset with its links; its bytes (`?download=1` to save) |
 | `GET` | `…/assets/:id/links` | what it links to, and what links to it |
 | `GET` | `…/assets/:id/thumb/:file_hash?w=` | a webp thumbnail, width rounded up to a multiple of 64 |
@@ -173,6 +180,7 @@ Everything under `/api/stores/<name>/` is that store's DataDungeon API, passed t
 | `POST` `DELETE` | `…/assets/:id/links` | link (`{rel, name}` or `{rel, to}`, with optional `data`) or unlink (`?rel=&name=`) — update mode |
 | `POST` | `…/assets/:id/retire`, `…/assets/:id/reinstate` | hide and keep, or bring back — update mode |
 | `POST` | `…/prune` | `{type, keep_last, retired_before}`: delete retired assets for good — update mode |
+| `POST` | `…/measure` | `{type, all}`: have the store measure its pictures — update mode |
 | `POST` | `…/types/:type/promote`, `…/vacuum` | update mode |
 
 ## What DataDungeon does not offer yet

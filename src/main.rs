@@ -55,6 +55,7 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route(&format!("{s}/check"), post(routes::check))
         .route(&format!("{s}/vacuum"), post(routes::vacuum))
         .route(&format!("{s}/prune"), post(routes::prune))
+        .route(&format!("{s}/measure"), post(routes::measure))
         .layer(axum::middleware::from_fn_with_state(state.clone(), routes::local_only))
         .with_state(state)
 }
