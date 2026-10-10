@@ -19,7 +19,7 @@ tagged `v0.3.2-server`.*
 | | |
 |---|---|
 | **Rust** stable (1.90+) | `cargo build --release`; the only build step |
-| a DataDungeon store, **0.9 or later** | reachable over its API: `dd-serve` beside a database, or an app that mounts `DataDungeon::API`. curio uses 0.9's search, links and paging |
+| a DataDungeon store, **0.11 or later** | reachable over its API: `dd-serve` beside a database, or an app that mounts `DataDungeon::API`. curio uses its search, links, paging and retiring |
 | `just` *(optional)* | remembers the commands; nothing requires it |
 
 ## Configuring stores
@@ -58,7 +58,13 @@ DataDungeon). Without `DD_WRITE_TOKEN` it opens the database read-only:
 ## Update mode
 
 curio starts read-only. The red switch in the corner turns update mode on, and then you can edit tags,
-description, rating and flag, delete an asset, make a custom tag value standard, and clean up a store.
+description, rating and flag, retire or delete an asset, make a custom tag value standard, and clean up
+a store.
+
+**Retire is the everyday way to get rid of something; Delete is the final one.** A retired asset is
+hidden from listings, counts and search, and kept: *Show: retired* in the filters finds it again, and
+*Reinstate* brings it back. A newer take that supersedes an old one retires it the same way. *Prune
+retired…* in Store health deletes a type's retired assets for good.
 
 It turns itself off again:
 
@@ -101,8 +107,9 @@ or a preview in the detail panel instead of a thumbnail.
   of a word. A search starts across every type, and choosing a type then narrows it.
 - **Types** across the top, with counts, come from the store, after **All**. No type or tag name is
   written into curio: every store has different ones, and they get renamed.
-- **Use** at the top of the filters: what a venue uses (`used by boardwalk`), or what nothing uses,
-  across every type. Who uses an asset is a *link* in DataDungeon, not a tag, because it changes and
+- **Use** at the top of the filters: what a venue uses (`used by boardwalk`, or `boardwalk.*` for it
+  and every area under it, such as `boardwalk.holidayland`), or what nothing uses, across every type;
+  and whether to show current assets, retired ones, or both. Who uses an asset is a *link* in DataDungeon, not a tag, because it changes and
   one asset can have several users; the detail panel lists an asset's links both ways, and in update
   mode adds them (`used-by` a name, or `#id` for another asset) and removes them.
 - **Filters** on the left are the type's tag names; a registered type's key traits come first, in key
@@ -157,13 +164,15 @@ Everything under `/api/stores/<name>/` is that store's DataDungeon API, passed t
 | `GET` | `/api/stores` | the stores and whether each is writable — never a token |
 | `GET` `POST` `DELETE` | `/api/update` | update mode: status, on (returns the key), off |
 | `GET` | `…/types`, `…/types/:type/tags[/:key]` | types, tag names, a tag's values, with counts |
-| `GET` | `…/assets?type=&q=&tag.<k>=&link.<rel>=&unlinked=&limit=&page=&count=1` | a page of assets |
+| `GET` | `…/assets?type=&q=&tag.<k>=&link.<rel>=&unlinked=&retired=&limit=&page=&count=1` | a page of assets |
 | `GET` | `…/assets/:id`, `…/assets/:id/object` | an asset with its links; its bytes (`?download=1` to save) |
 | `GET` | `…/assets/:id/links` | what it links to, and what links to it |
 | `GET` | `…/assets/:id/thumb/:file_hash?w=` | a webp thumbnail, width rounded up to a multiple of 64 |
 | `POST` | `…/check` | the store's consistency report |
 | `PATCH` `DELETE` | `…/assets/:id` | edit or delete — update mode |
-| `POST` `DELETE` | `…/assets/:id/links` | link (`{rel, name}` or `{rel, to}`) or unlink (`?rel=&name=`) — update mode |
+| `POST` `DELETE` | `…/assets/:id/links` | link (`{rel, name}` or `{rel, to}`, with optional `data`) or unlink (`?rel=&name=`) — update mode |
+| `POST` | `…/assets/:id/retire`, `…/assets/:id/reinstate` | hide and keep, or bring back — update mode |
+| `POST` | `…/prune` | `{type, keep_last, retired_before}`: delete retired assets for good — update mode |
 | `POST` | `…/types/:type/promote`, `…/vacuum` | update mode |
 
 ## What DataDungeon does not offer yet

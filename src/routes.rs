@@ -372,6 +372,21 @@ pub async fn vacuum(State(state): St, Path(name): Path<String>, headers: HeaderM
     write(&state, &name, &headers, Method::POST, &["maintenance", "vacuum"], None, Some(body)).await
 }
 
+/// Retiring hides an asset and keeps it — curation's everyday soft delete — and reinstating undoes it.
+/// Delete stays the final step.
+pub async fn retire(State(state): St, Path((name, id)): Path<(String, i64)>, headers: HeaderMap) -> Response {
+    write(&state, &name, &headers, Method::POST, &["assets", &id.to_string(), "retire"], None, None).await
+}
+
+pub async fn reinstate(State(state): St, Path((name, id)): Path<(String, i64)>, headers: HeaderMap) -> Response {
+    write(&state, &name, &headers, Method::POST, &["assets", &id.to_string(), "reinstate"], None, None).await
+}
+
+/// `{type, keep_last, retired_before}`: delete a type's retired assets for good.
+pub async fn prune(State(state): St, Path(name): Path<String>, headers: HeaderMap, body: Bytes) -> Response {
+    write(&state, &name, &headers, Method::POST, &["maintenance", "prune"], None, Some(body)).await
+}
+
 /// `{rel, name}` or `{rel, to}`: link this asset to a name (`used-by` boardwalk) or to another asset.
 pub async fn link(
     State(state): St,

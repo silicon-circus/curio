@@ -48,10 +48,13 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route(&format!("{s}/assets/{{id}}"),
             get(routes::asset).patch(routes::update_asset).delete(routes::delete_asset))
         .route(&format!("{s}/assets/{{id}}/links"), get(routes::links).post(routes::link).delete(routes::unlink))
+        .route(&format!("{s}/assets/{{id}}/retire"), post(routes::retire))
+        .route(&format!("{s}/assets/{{id}}/reinstate"), post(routes::reinstate))
         .route(&format!("{s}/assets/{{id}}/object"), get(routes::object))
         .route(&format!("{s}/assets/{{id}}/thumb/{{hash}}"), get(routes::thumb))
         .route(&format!("{s}/check"), post(routes::check))
         .route(&format!("{s}/vacuum"), post(routes::vacuum))
+        .route(&format!("{s}/prune"), post(routes::prune))
         .layer(axum::middleware::from_fn_with_state(state.clone(), routes::local_only))
         .with_state(state)
 }

@@ -180,6 +180,8 @@ section.drawer { display: flex; flex-direction: column; overflow: hidden; paddin
 }
 .card:hover { border-color: var(--mute); }
 .card.current { border-color: var(--teal); box-shadow: 0 0 0 2px var(--teal); }
+.card.retired .well, .card.retired .cap .t { opacity: .5; }
+.use select { font: 12.5px var(--body); padding: 2px 4px; border: 1px solid var(--rule); border-radius: 4px; background: var(--paper); }
 .card > .hit {
   flex: 1; min-height: 0; display: flex; flex-direction: column; width: 100%; border: 0; background: none;
   padding: 0; text-align: left; border-radius: 0;
@@ -318,7 +320,7 @@ button.tiny:hover { color: var(--ink); }
 const state = {
   stores: [], store: null, types: [], type: null, filters: {}, keys: {},
   assets: [], total: 0, page: 0, limit: 1, layout: null, selected: null, record: null,
-  q: "", uses: null, unused: false, counted: null,
+  q: "", uses: null, unused: false, retired: null, counted: null,
   key: null, idle: 600, deadline: 0, editing: null,
 };
 
@@ -402,6 +404,7 @@ function saveHash() {
   if (state.q) p.set("q", state.q);
   if (state.uses) p.set("uses", state.uses);
   if (state.unused) p.set("unused", "1");
+  if (state.retired) p.set("retired", state.retired);
   for (const [k, v] of Object.entries(state.filters)) p.set("tag." + k, v);
   if (state.page) p.set("page", state.page + 1);
   if (state.selected) p.set("id", state.selected);
@@ -413,7 +416,8 @@ function readHash() {
   for (const [k, v] of p) if (k.startsWith("tag.")) filters[k.slice(4)] = v;
   return { store: p.get("store"), type: p.get("type"), filters, id: Number(p.get("id")) || null,
            page: Math.max(0, (Number(p.get("page")) || 1) - 1),
-           q: p.get("q") || "", uses: p.get("uses"), unused: p.get("unused") === "1" };
+           q: p.get("q") || "", uses: p.get("uses"), unused: p.get("unused") === "1",
+           retired: ["only", "include"].includes(p.get("retired")) ? p.get("retired") : null };
 }
 
 // ── stores and types ───────────────────────────────────────────────────────────────────────────
@@ -447,7 +451,7 @@ async function openStore(name, want) {
   $("store").value = name;
   state.type = null; state.types = [];
   state.q = want.q || ""; $("q").value = state.q;
-  state.uses = want.uses || null; state.unused = !!want.unused;
+  state.uses = want.uses || null; state.unused = !!want.unused; state.retired = want.retired || null;
   closeDetail(true);
   renderSwitch();
   try {
@@ -480,7 +484,8 @@ function renderTypes() {
     h("button", { "aria-pressed": String(state.type === null), onclick: () => openType(null, {}) },
       "All", h("span", { className: "n" }, total)),
     ...state.types.map((t) =>
-      h("button", { "aria-pressed": String(t.name === state.type), onclick: () => openType(t.name, {}) },
+      h("button", { "aria-pressed": String(t.name === state.type), onclick: () => openType(t.name, {}),
+        title: t.retired ? `${t.count} current, ${t.retired} retired` : null },
         t.name, h("span", { className: "n" }, t.count))));
 }
 
@@ -515,7 +520,7 @@ async function loadKeys() {
     return;
   }
   let counts = {};
-  try { counts = await api(`${S()}/types/${enc(state.type)}/tags`); }
+  try { counts = await api(`${S()}/types/${enc(state.type)}/tags${state.retired ? "?retired=" + state.retired : ""}`); }
   catch (e) { toast(e.message, true); }
   const reg = registration();
   const traits = (reg && reg.pool_traits) || [];
@@ -547,7 +552,7 @@ async function toggleGroup(key, open) {
   g.firstChild.setAttribute("aria-expanded", String(willOpen));
   list.hidden = !willOpen;
   if (!willOpen || state.keys[key]) return renderValues(key);
-  try { state.keys[key] = await api(`${S()}/types/${enc(state.type)}/tags/${enc(key)}?limit=100`); }
+  try { state.keys[key] = await api(`${S()}/types/${enc(state.type)}/tags/${enc(key)}?limit=100${state.retired ? "&retired=" + state.retired : ""}`); }
   catch (e) { toast(e.message, true); state.keys[key] = {}; }
   renderValues(key);
 }
@@ -579,7 +584,7 @@ function setFilter(key, value) {
 function clearFilters() {
   state.filters = {};
   state.q = ""; $("q").value = "";
-  state.uses = null; state.unused = false;
+  state.uses = null; state.unused = false; state.retired = null;
   refreshUse();
   setFilter("", null);
 }
@@ -587,13 +592,27 @@ function clearFilters() {
 /* WHO USES AN ASSET is a link, not a tag: `used-by` boardwalk. It is kept out of the key because use
  * changes and one asset can have several users, so it filters across every type. */
 function useFilters() {
-  const by = h("input", { type: "text", value: state.uses || "", placeholder: "boardwalk", "aria-label": "Used by",
+  const by = h("input", { type: "text", value: state.uses || "", placeholder: "boardwalk, boardwalk.*", "aria-label": "Used by",
+    title: "A name, or name.* for it and every area under it (boardwalk.holidayland), or start* for any name starting so",
     onkeydown: (e) => { if (e.key === "Enter") setUse(e.target.value.trim() || null, false); } });
   return h("div", { className: "use" },
     h("p", { className: "eyebrow", style: "margin:0" }, "Use"),
     h("label", null, "Used by", by),
     h("label", null, h("input", { type: "checkbox", checked: state.unused, onchange: (e) => setUse(null, e.target.checked) }),
-      "Used by nothing"));
+      "Used by nothing"),
+    h("label", null, "Show", h("select", { "aria-label": "Show retired", onchange: (e) => setRetired(e.target.value || null) },
+      ...[["", "current"], ["only", "retired"], ["include", "current and retired"]].map(([v, label]) =>
+        h("option", { value: v, selected: (state.retired || "") === v }, label)))));
+}
+
+/* RETIRED assets are hidden and kept: superseded by a newer take, or retired by hand as curation's
+ * everyday soft delete. Listings and counts leave them out unless asked. */
+function setRetired(retired) {
+  state.retired = retired;
+  state.keys = {};
+  closeDetail(true);
+  if (state.type) loadKeys();
+  loadAssets(0);
 }
 
 function setUse(uses, unused) {
@@ -632,9 +651,30 @@ function health() {
     h("p", { className: "eyebrow" }, "Store health"),
     h("div", { className: "row" },
       h("button", { className: "plain", onclick: () => check(out) }, "Check store"),
-      updating() ? h("button", { className: "plain danger", onclick: () => cleanUp(out) }, "Clean up…") : null),
+      updating() ? h("button", { className: "plain danger", onclick: () => cleanUp(out) }, "Clean up…") : null,
+      updating() && retiredHere() ? h("button", { className: "plain danger", onclick: () => prune(out) },
+        `Prune ${retiredHere()} retired…`) : null),
     out);
   return box;
+}
+
+function retiredHere() {
+  const t = state.types.find((t) => t.name === state.type);
+  return (t && t.retired) || 0;
+}
+
+async function prune(out) {
+  const n = retiredHere();
+  if (!confirm(`Delete the ${n} retired ${state.type} in ${state.store} for good?\n\nTheir objects go too, unless another asset shares the bytes. This can't be undone.`)) return;
+  out.textContent = "Pruning…";
+  try {
+    const got = await api(`${S()}/prune`, { method: "POST", body: { type: state.type } });
+    out.textContent = `Pruned ${got.pruned ?? n} retired ${state.type}.`;
+    state.types = await api(`${S()}/types`).catch(() => state.types);
+    renderTypes();
+    state.counted = null;
+    loadAssets(state.page);
+  } catch (e) { out.textContent = e.message; }
 }
 
 async function check(out) {
@@ -697,6 +737,7 @@ async function loadAssets(page, keep) {
   for (const [k, v] of Object.entries(state.filters)) q.set("tag." + k, v);
   if (state.uses) q.set("link.used-by", state.uses);
   if (state.unused) q.set("unlinked", "used-by");
+  if (state.retired) q.set("retired", state.retired);
   // A total reads every match, so it is asked for once per search, not on every page turn.
   const asking = state.store + "?" + q.toString().replace(/(^|&)(limit|page)=[^&]*/g, "");
   if (state.counted !== asking) q.set("count", 1);
@@ -764,6 +805,7 @@ function renderDrawer() {
     state.q ? chip(`“${state.q}”`, () => { $("q").value = ""; search(); }) : null,
     state.uses ? chip(`used by ${state.uses}`, () => setUse(null, false)) : null,
     state.unused ? chip("used by nothing", () => setUse(null, false)) : null,
+    state.retired ? chip(state.retired === "only" ? "retired only" : "with retired", () => { setRetired(null); refreshUse(); }) : null,
     ...Object.entries(state.filters).map(([k, v]) => chip(`${k}=${v}`, () => setFilter(k, null))),
   ].filter(Boolean);
   const first = state.page * state.limit + 1, last = state.page * state.limit + state.assets.length;
@@ -801,12 +843,13 @@ function card(a) {
     well = h("div", { className: "well" }, h("span", { className: "glyph" }, glyph(a)));
   }
   const current = a.id === state.selected;
-  const el = h("div", { className: "card" + (current ? " current" : ""), "data-id": a.id },
+  const el = h("div", { className: "card" + (current ? " current" : "") + (a.retired_at ? " retired" : ""), "data-id": a.id },
     h("button", { className: "hit", "aria-current": String(current), title: caption(a), onclick: () => select(a.id) },
       well,
       h("span", { className: "cap" },
         h("span", { className: "t", "data-full": caption(a) }, caption(a)),
         h("span", { className: "s" }, h("span", null, "#" + a.id), state.type ? null : h("span", null, a.asset_type),
+          a.retired_at ? h("span", null, "retired") : null,
           a.rating ? h("span", null, "★".repeat(a.rating)) : null))),
     a.flagged ? h("span", { className: "flag", title: "Flagged" }) : null);
   if (a.media === "audio") {
@@ -899,7 +942,8 @@ function renderDetail() {
     meta && meta.duration_ms ? ["length", `${(meta.duration_ms / 1000).toFixed(1)} s`] : null,
     ["index key", a.pool_key], ["pool", a.pool ? "yes, interchangeable" : null],
     ["hash", a.file_hash], ["object", a.file_path],
-    ["created", a.created_at], ["last used", a.last_used_at], ["uses", a.use_count || null],
+    ["made", a.made_at], ["stored", a.created_at], ["retired", a.retired_at],
+    ["last used", a.last_used_at], ["uses", a.use_count || null],
     ["generated", a.generated ? (a.generator || "yes") : null],
     ["permanent", a.permanent ? "yes" : null],
   ].filter((f) => f && f[1] != null && f[1] !== "");
@@ -912,6 +956,8 @@ function renderDetail() {
     h("div", { className: "links" },
       h("a", { href: objectURL(a), target: "_blank", rel: "noopener" }, "Open original"),
       h("a", { href: objectURL(a, true) }, "Download")),
+    a.retired_at ? h("p", { className: "note" }, `Retired ${a.retired_at}: hidden from listings and search, and kept. `,
+      canEdit ? h("button", { className: "plain", onclick: () => setRetirement(a, false) }, "Reinstate") : null) : null,
     !writable() ? h("p", { className: "note" }, `${state.store} is read-only here: curio's config gives it no write token.`)
       : !canEdit ? h("p", { className: "note" }, "Turn on update mode to change this asset.") : null,
 
@@ -940,6 +986,8 @@ function renderDetail() {
             h("button", { className: "plain", onclick: () => { state.editing = null; renderDetail(); } }, "Cancel")]
          : h("button", { className: "plain", onclick: edit }, "Edit tags and description"),
       h("span", { style: "flex:1" }),
+      a.retired_at ? null : h("button", { className: "plain", title: "Hide it from listings and search, and keep it; reinstate undoes it",
+        onclick: () => setRetirement(a, true) }, "Retire"),
       h("button", { className: "plain danger", onclick: remove }, "Delete asset")) : null,
 
     linksSection(a, canEdit),
@@ -971,7 +1019,8 @@ function linksSection(a, canEdit) {
   const rows = [
     ...links.from.map((l) => h("tr", null,
       h("td", { className: "k" }, l.rel),
-      h("td", { className: "v" }, l.to_name != null ? l.to_name : ref(l.to_id)),
+      h("td", { className: "v" }, l.to_name != null ? l.to_name : ref(l.to_id),
+        l.data ? h("span", { className: "mono mute", style: "display:block; font-size:11.5px" }, JSON.stringify(l.data)) : null),
       h("td", { className: "x" }, canEdit ? h("button", {
         className: "tiny", "aria-label": `Remove ${l.rel} ${l.to_name ?? "#" + l.to_id}`, onclick: () => unlinkIt(a.id, l),
       }, "×") : null))),
@@ -1068,6 +1117,19 @@ async function promote(k, v) {
     toast(`${k}=${v} is now a standard value (${out.promoted} tag${out.promoted === 1 ? "" : "s"}).`);
     state.record = await api(`${S()}/assets/${state.record.asset.id}`);
     renderDetail();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function setRetirement(a, retire) {
+  try {
+    await api(`${S()}/assets/${a.id}/${retire ? "retire" : "reinstate"}`, { method: "POST" });
+    toast(retire ? `Retired #${a.id}. Show retired to find it again.` : `Reinstated #${a.id}.`);
+    state.record = await api(`${S()}/assets/${a.id}`);
+    renderDetail();
+    state.types = await api(`${S()}/types`).catch(() => state.types);
+    renderTypes();
+    state.counted = null;
+    loadAssets(state.page);
   } catch (e) { toast(e.message, true); }
 }
 
