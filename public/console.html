@@ -381,8 +381,8 @@ async function api(path, opts = {}) {
 }
 
 /* What to call an asset. DataDungeon gives assets no names, so: its description; else its tags, in
- * its type's trait order — what its key says, built here rather than read from `pool_key`, which is
- * an index DataDungeon is free to rename or move (deprecated in 0.12); else every tag as k=v. */
+ * its type's trait order — what its key says, built here rather than read from `key` (`pool_key`
+ * before DataDungeon 0.12), which is an index and free to change; else every tag as k=v. */
 function caption(a, tags = a.tags) {
   if (a.description) return a.description;
   tags = tags || {};
@@ -1049,7 +1049,7 @@ function renderDetail() {
     ["type", a.asset_type], ["media", a.content_type],
     meta && meta.width ? ["size", `${meta.width} × ${meta.height}`] : null,
     meta && meta.duration_ms ? ["length", `${(meta.duration_ms / 1000).toFixed(1)} s`] : null,
-    ["index key", a.pool_key], ["pool", a.pool ? "yes, interchangeable" : null],
+    ["index key", a.key ?? a.pool_key],
     ["hash", a.file_hash], ["object", a.file_path],
     ["made", a.made_at], ["stored", a.created_at], ["retired", a.retired_at],
     ["last used", a.last_used_at], ["uses", a.use_count || null],
