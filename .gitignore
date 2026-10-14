@@ -14,3 +14,6 @@ bin/
 .shards/
 *.dwarf
 target/
+
+# The agents' notes and mail: a worktree of this repo's `ai` branch
+/.ai/
