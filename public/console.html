@@ -261,6 +261,17 @@ dl.facts dd { margin: 0; font-family: var(--mono); overflow-wrap: anywhere; }
 details.gen summary { cursor: pointer; font-size: 12.5px; color: var(--mute); }
 details.gen pre { font: 12px/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0 0; }
 .desc { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+.made { display: grid; gap: 10px; }
+.made .step { border-left: 3px solid var(--rule); padding-left: 10px; }
+.made .what { font-size: 12px; color: var(--mute); margin: 0 0 4px; }
+table.prompt td { vertical-align: top; }
+table.prompt td.k { width: 22%; }
+table.prompt td.v { font-family: var(--body); }
+.named { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 3px; }
+button.tiny.name { color: var(--teal); font-family: var(--mono); }
+.sent { font: 12px/1.45 var(--mono); }
+.sent mark { background: color-mix(in srgb, var(--amber) 35%, transparent); color: inherit; border-radius: 2px; }
+label.everywhere { display: flex; align-items: center; gap: 6px; font-size: 12.5px; margin-top: 6px; }
 textarea { width: 100%; min-height: 88px; border: 1px solid var(--rule); border-radius: 6px; padding: 6px 8px; background: var(--board); resize: vertical; }
 .stars { display: inline-flex; gap: 2px; }
 .stars button { border: 0; background: none; padding: 0 1px; font-size: 18px; line-height: 1; color: var(--rule); }
@@ -334,8 +345,8 @@ button.tiny:hover { color: var(--ink); }
 const state = {
   stores: [], store: null, types: [], type: null, filters: {}, keys: {},
   assets: [], total: 0, page: 0, limit: 1, layout: null, selected: null, record: null,
-  q: "", uses: null, unused: false, retired: null, view: null, viewCounts: {}, counted: null,
-  key: null, idle: 600, deadline: 0, editing: null,
+  q: "", uses: null, unused: false, retired: null, view: null, viewCounts: {}, counted: null, find: null,
+  extra: null, key: null, idle: 600, deadline: 0, editing: null,
 };
 
 // ── small helpers ──────────────────────────────────────────────────────────────────────────────
@@ -436,6 +447,7 @@ function saveHash() {
   if (state.unused) p.set("unused", "1");
   if (state.retired) p.set("retired", state.retired);
   if (state.view) p.set("view", state.view);
+  if (state.find) p.set(state.find.param, state.find.value);
   for (const [k, v] of Object.entries(state.filters)) p.set("tag." + k, v);
   if (state.page) p.set("page", state.page + 1);
   if (state.selected) p.set("id", state.selected);
@@ -444,12 +456,16 @@ function saveHash() {
 function readHash() {
   const p = new URLSearchParams(location.hash.slice(1));
   const filters = {};
-  for (const [k, v] of p) if (k.startsWith("tag.")) filters[k.slice(4)] = v;
+  let find = null;
+  for (const [k, v] of p) {
+    if (k.startsWith("tag.")) filters[k.slice(4)] = v;
+    else if (FINDS.test(k) && v) find = { param: k, value: v };
+  }
   return { store: p.get("store"), type: p.get("type"), filters, id: Number(p.get("id")) || null,
            page: Math.max(0, (Number(p.get("page")) || 1) - 1),
            q: p.get("q") || "", uses: p.get("uses"), unused: p.get("unused") === "1",
            retired: ["only", "include"].includes(p.get("retired")) ? p.get("retired") : null,
-           view: p.get("view") };
+           view: p.get("view"), find };
 }
 
 // ── stores and types ───────────────────────────────────────────────────────────────────────────
@@ -485,6 +501,7 @@ async function openStore(name, want) {
   state.q = want.q || ""; $("q").value = state.q;
   state.uses = want.uses || null; state.unused = !!want.unused; state.retired = want.retired || null;
   state.view = want.view || null;
+  state.find = want.find || null;
   closeDetail(true);
   renderSwitch();
   try {
@@ -504,7 +521,7 @@ async function openStore(name, want) {
     return;
   }
   // Every type: asked for in the URL, or implied by a search with no type.
-  const all = want.type === "*" || (!want.type && state.q);
+  const all = want.type === "*" || (!want.type && (state.q || state.find));
   const chosen = all ? null : (state.types.find((t) => t.name === want.type)
     || state.types.find((t) => t.count > 0) || state.types[0]);
   await openType(chosen && chosen.name, want.filters || {}, want.id, want.page);
@@ -618,9 +635,26 @@ function setFilter(key, value) {
 function clearFilters() {
   state.filters = {};
   state.q = ""; $("q").value = "";
-  state.uses = null; state.unused = false; state.retired = null; state.view = null;
+  state.uses = null; state.unused = false; state.retired = null; state.view = null; state.find = null;
   refreshUse();
   setFilter("", null);
+}
+
+/* FOUND BY WHAT IT SHARES (DataDungeon 0.13): the asset holding a file that a recipe names, the
+ * assets sharing one description, or every asset whose recipe uses a named wording — one version of
+ * it (`overlore:silver@2`), or any. These cross types, as a search does. */
+const FINDS = /^(file_hash|description_hash|text\.[\w-]+)$/;
+async function setFind(find) {
+  state.find = find;
+  closeDetail(true);
+  if (find && state.type) await openType(null, {}); else await loadAssets(0);
+  // A recipe's reference is usually one asset: open it.
+  if (find && find.param === "file_hash" && state.assets.length === 1) select(state.assets[0].id);
+}
+function findLabel(f) {
+  if (f.param === "file_hash") return `file ${f.value.slice(0, 12)}…`;
+  if (f.param === "description_hash") return "sharing a description";
+  return `${f.param.slice(5)} wording ${f.value}${f.value.includes("@") ? "" : " (any version)"}`;
 }
 
 /* WHO USES AN ASSET is a link, not a tag: `used-by` boardwalk. It is kept out of the key because use
@@ -835,6 +869,7 @@ async function loadAssets(page, keep) {
   if (state.unused) q.set("unlinked", "used-by");
   if (state.retired) q.set("retired", state.retired);
   if (state.view) q.set("view", state.view);
+  if (state.find) q.set(state.find.param, state.find.value);
   // A total reads every match, so it is asked for once per search, not on every page turn.
   const asking = state.store + "?" + q.toString().replace(/(^|&)(limit|page)=[^&]*/g, "");
   if (state.counted !== asking) q.set("count", 1);
@@ -904,6 +939,7 @@ function renderDrawer() {
     state.unused ? chip("used by nothing", () => setUse(null, false)) : null,
     state.retired ? chip(state.retired === "only" ? "retired only" : "with retired", () => { setRetired(null); refreshUse(); }) : null,
     state.view ? chip(`seen ${state.view}`, () => setView(null)) : null,
+    state.find ? chip(findLabel(state.find), () => setFind(null)) : null,
     ...Object.entries(state.filters).map(([k, v]) => chip(`${k}=${v}`, () => setFilter(k, null))),
   ].filter(Boolean);
   const first = state.page * state.limit + 1, last = state.page * state.limit + state.assets.length;
@@ -918,7 +954,9 @@ function renderDrawer() {
   shape(state.layout);
   if (!state.assets.length) {
     fill($("grid"), h("p", { className: "empty" },
-      chips.length ? "Nothing matches all of these. Remove one to widen the search." : `${state.store} has no ${state.type || "assets"}.`));
+      state.find && state.find.param === "file_hash" && chips.length === 1
+        ? `No asset in ${state.store} holds this file. It may be in another store, or was never stored.`
+        : chips.length ? "Nothing matches all of these. Remove one to widen the search." : `${state.store} has no ${state.type || "assets"}.`));
     return;
   }
   fill($("grid"), ...state.assets.map(card));
@@ -992,12 +1030,27 @@ async function select(id) {
   try { state.record = await api(`${S()}/assets/${id}`); }
   catch (e) { fill($("detail"), h("p", { className: "body" }, e.message)); return; }
   state.editing = null;
+  state.extra = null;
+  renderDetail();
+  loadExtras(state.record.asset);
+}
+
+/* What only an open asset needs (DataDungeon 0.13): its recipe, and how many assets share its
+ * description. Asked for after the asset shows, since most have neither. */
+async function loadExtras(a) {
+  const [recipe, shared] = await Promise.all([
+    a.has_recipe ? api(`${S()}/assets/${a.id}/recipe`).then((r) => r.recipe).catch(() => null) : null,
+    a.description_hash ? api(`${S()}/assets?description_hash=${a.description_hash}&retired=include&count=1&limit=1`)
+      .then((r) => r.total).catch(() => null) : null,
+  ]);
+  if (state.selected !== a.id) return;
+  state.extra = { id: a.id, recipe, shared };
   renderDetail();
 }
 
 // `quiet` when the caller is about to load a page anyway, so the grid is not fetched twice.
 function closeDetail(quiet) {
-  state.selected = null; state.record = null; state.editing = null;
+  state.selected = null; state.record = null; state.editing = null; state.extra = null;
   const was = !$("detail").hidden;
   if (was) { $("main").classList.remove("detailed"); $("detail").hidden = true; }
   markCurrent(null);
@@ -1033,6 +1086,11 @@ function renderDetail() {
   const { asset: a, tags, custom, meta } = state.record;
   const ed = state.editing;
   const canEdit = updating();
+  // DataDungeon 0.13 says on every asset whether it has a recipe; older stores can't set `permanent`.
+  const v13 = "has_recipe" in a;
+  const x = state.extra && state.extra.id === a.id ? state.extra : null;
+  const shared = x && x.shared > 1 ? x.shared : 0;
+  const permanent = ed ? ed.permanent : a.permanent;
 
   const tagRows = ed
     ? ed.rows.map(([k, v], i) => h("tr", null,
@@ -1054,7 +1112,7 @@ function renderDetail() {
     ["made", a.made_at], ["stored", a.created_at], ["retired", a.retired_at],
     ["last used", a.last_used_at], ["uses", a.use_count || null],
     ["generated", a.generated ? (a.generator || "yes") : null],
-    ["permanent", a.permanent ? "yes" : null],
+    ["permanent", a.permanent && !v13 ? "yes" : null],
   ].filter((f) => f && f[1] != null && f[1] !== "");
 
   const body = h("div", { className: "body" },
@@ -1079,7 +1137,14 @@ function renderDetail() {
     h("div", null,
       h("p", { className: "eyebrow" }, "Description"),
       ed ? h("textarea", { value: ed.description, "aria-label": "Description", oninput: (e) => { ed.description = e.target.value; } })
-         : a.description ? h("p", { className: "desc" }, a.description) : h("p", { className: "mute" }, "None.")),
+         : a.description ? h("p", { className: "desc" }, a.description) : h("p", { className: "mute" }, "None."),
+      // ONE TEXT, SEVERAL ASSETS: a room's description is shared by every picture of the room. A fix
+      // made here changes this asset's words alone unless asked to change them for all.
+      shared && ed ? h("label", { className: "everywhere" },
+        h("input", { type: "checkbox", checked: ed.everywhere, onchange: (e) => { ed.everywhere = e.target.checked; } }),
+        `Change it on all ${shared} assets that share it`) : null,
+      shared && !ed ? h("button", { className: "tiny", title: "List every asset with this description",
+        onclick: () => setFind({ param: "description_hash", value: a.description_hash }) }, `Shared by ${shared} assets`) : null),
 
     h("div", { className: "row" },
       h("span", { className: "eyebrow", style: "margin:0" }, "Rating"),
@@ -1088,7 +1153,13 @@ function renderDetail() {
       h("button", {
         className: "plain", disabled: !canEdit, "aria-pressed": String(ed ? ed.flagged : a.flagged),
         onclick: () => { if (ed) { ed.flagged = !ed.flagged; renderDetail(); } else quick({ flagged: !a.flagged }); },
-      }, (ed ? ed.flagged : a.flagged) ? "⚑ Flagged" : "Not flagged")),
+      }, (ed ? ed.flagged : a.flagged) ? "⚑ Flagged" : "Not flagged"),
+      v13 ? [h("span", { className: "eyebrow", style: "margin:0 0 0 12px" }, "Permanent"),
+        h("button", {
+          className: "plain", disabled: !canEdit, "aria-pressed": String(permanent),
+          title: "A permanent asset is never evicted for lack of use",
+          onclick: () => { if (ed) { ed.permanent = !ed.permanent; renderDetail(); } else quick({ permanent: !a.permanent }); },
+        }, permanent ? "Yes, never evicted" : "No")] : null),
 
     canEdit ? h("div", { className: "row" },
       ed ? [h("button", { className: "plain go", onclick: save }, "Save changes"),
@@ -1104,7 +1175,7 @@ function renderDetail() {
 
     h("div", null, h("p", { className: "eyebrow" }, "Record"),
       h("dl", { className: "facts" }, ...facts.flatMap(([k, v]) => [h("dt", null, k), h("dd", null, String(v))]))),
-    a.generation ? h("details", { className: "gen" }, h("summary", null, "How it was generated"), h("pre", null, pretty(a.generation))) : null,
+    madeSection(a, x),
   );
 
   fill($("detail"), 
@@ -1240,6 +1311,74 @@ async function unlinkIt(id, l) {
 
 function pretty(s) { try { return JSON.stringify(JSON.parse(s), null, 2); } catch { return s; } }
 
+/* HOW IT WAS MADE: the recipe DataDungeon keeps since 0.13, in the shape every app shares — the
+ * settings, the prompt by field in the order they are joined, and what it was made from. A named
+ * wording (`overlore:silver@2`) finds every asset that used it; a reference, the asset holding that
+ * file. Assets stored before recipes keep their old record, free-form, until their app moves it. */
+function madeSection(a, x) {
+  if (a.has_recipe) return h("div", { className: "made" },
+    h("p", { className: "eyebrow" }, "How it was made"),
+    !x ? h("p", { className: "mute" }, "Loading…")
+      : x.recipe ? recipeView(x.recipe) : h("p", { className: "mute" }, "The store didn't send its recipe."));
+  return a.generation ? h("details", { className: "gen" }, h("summary", null, "How it was made (an old record)"),
+    h("pre", null, pretty(a.generation))) : null;
+}
+
+function recipeView(r) {
+  if (!r.steps || !r.steps.length) return stepView(r);
+  return h("div", { className: "made" }, h("p", { className: "mute", style: "margin:0" }, `Made in ${r.steps.length} steps.`),
+    ...r.steps.map((s, i) => h("div", { className: "step" }, h("p", { className: "what" }, `Step ${i + 1}`), stepView(s))));
+}
+
+function stepView(r) {
+  const fields = Object.entries(r.fields || {});
+  const facts = [
+    ["made", r.generated_at],
+    ["cost", r.cost != null ? `$${Number(r.cost.toPrecision(3))}${r.cost_basis ? ` (${r.cost_basis})` : ""}` : null],
+    ["seed", r.seed],
+    ...Object.entries(r.settings || {}).map(([k, v]) => [k, typeof v === "string" ? v : JSON.stringify(v)]),
+  ].filter(([, v]) => v != null && v !== "");
+  // What the provider was sent, when it isn't simply the fields joined by one space: a camera that
+  // adds words of its own shows here, with them marked.
+  const joined = fields.map(([, t]) => t.text).filter(Boolean).join(" ");
+  const sent = r.prompt_sent;
+  return h("div", { className: "made" },
+    facts.length ? h("dl", { className: "facts" }, ...facts.flatMap(([k, v]) => [h("dt", null, k), h("dd", null, String(v))])) : null,
+    fields.length ? h("div", null, h("p", { className: "what" }, r.form === "speech" ? "Spoken" : "Prompt"),
+      h("table", { className: "tags prompt" }, h("tbody", null, ...fields.map(([field, t]) => h("tr", null,
+        h("td", { className: "k" }, field),
+        h("td", { className: "v" }, h("span", { className: "desc" }, t.text), t.name ? named(field, t.name) : null)))))) : null,
+    sent == null || !fields.length ? null
+      : sent === joined ? h("p", { className: "mute", style: "margin:0; font-size:12.5px" }, "Sent as written: the fields joined.")
+      : h("div", null, h("p", { className: "what" }, "What the provider was sent"),
+          h("p", { className: "desc sent", title: "Marked: what differs from the fields joined" }, ...marked(joined, sent))),
+    r.references && r.references.length ? h("div", null, h("p", { className: "what" }, "Made from"),
+      h("div", { className: "row", style: "gap:4px" }, ...r.references.map((hash) => h("button", {
+        className: "tiny mono", title: `Find the asset holding ${hash}`, onclick: () => setFind({ param: "file_hash", value: hash }),
+      }, hash.slice(0, 12) + "…")))) : null);
+}
+
+// A named wording: its version finds the assets that used exactly these words; "any version", the
+// assets that used the name at all.
+function named(field, name) {
+  const base = name.replace(/@\d+$/, "");
+  return h("span", { className: "named" },
+    h("button", { className: "tiny name", title: `Every asset whose ${field} is this wording`,
+      onclick: () => setFind({ param: "text." + field, value: name }) }, name),
+    base !== name ? h("button", { className: "tiny", title: `Every asset whose ${field} is any wording of ${base}`,
+      onclick: () => setFind({ param: "text." + field, value: base }) }, "any version") : null);
+}
+
+// `sent`, with what differs from `joined` marked: the stretch between their common start and end.
+function marked(joined, sent) {
+  let p = 0;
+  while (p < joined.length && p < sent.length && joined[p] === sent[p]) p++;
+  let s = 0;
+  while (s < joined.length - p && s < sent.length - p && joined[joined.length - 1 - s] === sent[sent.length - 1 - s]) s++;
+  const mid = sent.slice(p, sent.length - s);
+  return [sent.slice(0, p), mid ? h("mark", null, mid) : null, sent.slice(sent.length - s)];
+}
+
 function stars(n, live, set) {
   return h("span", { className: "stars", role: "group", "aria-label": n ? `Rated ${n} of 5` : "Unrated" },
     ...[1, 2, 3, 4, 5].map((i) => h("button", {
@@ -1250,7 +1389,8 @@ function stars(n, live, set) {
 
 function edit() {
   const { asset: a, tags } = state.record;
-  state.editing = { rows: sortedTags(tags), description: a.description || "", rating: a.rating, flagged: a.flagged };
+  state.editing = { rows: sortedTags(tags), description: a.description || "", rating: a.rating, flagged: a.flagged,
+                    permanent: a.permanent, everywhere: false };
   renderDetail();
 }
 
@@ -1264,12 +1404,17 @@ async function patch(body, done) {
     state.editing = null;
     state.record = await api(`${S()}/assets/${id}`);   // custom flags and metadata, as the store now has them
     renderDetail(); renderDrawer();
+    loadExtras(state.record.asset);
+    // Other assets' descriptions changed too, and some may be on this page.
+    if (body.everywhere) loadAssets(state.page);
     toast(done);
   } catch (e) { toast(e.message, true); }
 }
 
 function quick(body) {
-  patch(body, body.rating ? `Rated ${body.rating} of 5.` : body.flagged ? "Flagged." : "Unflagged.");
+  patch(body, "rating" in body ? `Rated ${body.rating} of 5.`
+    : "flagged" in body ? (body.flagged ? "Flagged." : "Unflagged.")
+    : body.permanent ? "Permanent: it won't be evicted." : "No longer permanent: it can be evicted when unused.");
 }
 
 function save() {
@@ -1282,8 +1427,11 @@ function save() {
   if (ed.description !== (a.description || "")) body.description = ed.description;
   if (ed.rating !== a.rating && ed.rating != null) body.rating = ed.rating;
   if (ed.flagged !== a.flagged) body.flagged = ed.flagged;
+  if (ed.permanent !== a.permanent) body.permanent = ed.permanent;
   if (!Object.keys(body).length) { state.editing = null; renderDetail(); return; }
-  patch(body, "Saved.");
+  const shared = state.extra && state.extra.id === a.id ? state.extra.shared : 0;
+  if ("description" in body && ed.everywhere && shared > 1) body.everywhere = true;
+  patch(body, body.everywhere ? `Saved. The description changed on all ${shared} assets that shared it.` : "Saved.");
 }
 
 async function promote(k, v) {

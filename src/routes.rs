@@ -183,6 +183,12 @@ pub async fn asset(State(state): St, Path((name, id)): Path<(String, i64)>) -> R
     read(&state, &name, &["assets", &id.to_string()], None).await
 }
 
+/// How an asset was made, in the shape every app shares (DataDungeon 0.13): its settings, its prompt
+/// by field, what it was made from. A 404 from the store means it has none.
+pub async fn recipe(State(state): St, Path((name, id)): Path<(String, i64)>) -> Response {
+    read(&state, &name, &["assets", &id.to_string(), "recipe"], None).await
+}
+
 /// What an asset links to — `used-by` boardwalk, `derived-from` another asset — and what links to it.
 pub async fn links(State(state): St, Path((name, id)): Path<(String, i64)>) -> Response {
     read(&state, &name, &["assets", &id.to_string(), "links"], None).await

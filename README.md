@@ -19,7 +19,7 @@ tagged `v0.3.2-server`.*
 | | |
 |---|---|
 | **Rust** stable (1.90+) | `cargo build --release`; the only build step |
-| a DataDungeon store, **0.11.2 or later** | reachable over its API: `dd-serve` beside a database, or an app that mounts `DataDungeon::API`. curio uses its search, links, paging, retiring and picture fields |
+| a DataDungeon store, **0.11.2 or later** | reachable over its API: `dd-serve` beside a database, or an app that mounts `DataDungeon::API`. curio uses its search, links, paging, retiring and picture fields; from **0.13**, recipes, shared descriptions and `permanent`, which an older store simply doesn't show |
 | `just` *(optional)* | remembers the commands; nothing requires it |
 
 ## Configuring stores
@@ -58,8 +58,13 @@ DataDungeon). Without `DD_WRITE_TOKEN` it opens the database read-only:
 ## Update mode
 
 curio starts read-only. The red switch in the corner turns update mode on, and then you can edit tags,
-description, rating and flag, retire or delete an asset, make a custom tag value standard, and clean up
-a store.
+description, rating, flag and whether it's permanent (never evicted for lack of use), retire or delete
+an asset, make a custom tag value standard, and clean up a store.
+
+**A description can be shared.** A room's description is one text, used by every picture of the room.
+Editing it changes this asset's words alone, unless you tick *Change it on all N assets that share
+it*; the old words are kept, since a recipe may record them as what a provider was sent. Saving an
+empty description clears it.
 
 **Retire is the everyday way to get rid of something; Delete is the final one.** A retired asset is
 hidden from listings, counts and search, and kept: *Show: retired* in the filters finds it again, and
@@ -121,6 +126,15 @@ or a preview in the detail panel instead of a thumbnail.
   counts; *Measure pictures* in Store health fills in any not yet measured. On the cards, a cut-out
   sits on the checkerboard and any other picture on its own dominant colour, which is also what shows
   while its thumbnail loads; a picture with a view is labelled with it.
+- **How it was made** in the detail panel: the recipe DataDungeon keeps (0.13), in the shape every
+  app shares. It shows the settings, the cost and where that figure came from, and the prompt by
+  field, in the order the fields are joined. If the provider was sent something other than the fields
+  joined, what it was sent is shown with the difference marked; that's a camera adding words of its
+  own. A named wording (`overlore:silver@2`) lists every asset that used exactly it, and *any
+  version* every asset that used the name. *Made from* lists the files it was made from; each opens
+  the asset holding it, or says no asset in this store does. An asset made in steps shows each step.
+  Assets stored before recipes show their old record as it was written. *Shared by N assets* under a
+  description lists them. Each of these is a chip above the grid, across every type, and in the URL.
 - **Filters** on the left are the type's tag names; a registered type's key traits come first, in key
   order. The bar behind each value is its share of the type. Filtering on several tags means all of
   them, and every filter, search and use filter shows as a chip above the grid.
@@ -174,12 +188,13 @@ Everything under `/api/stores/<name>/` is that store's DataDungeon API, passed t
 | `GET` | `/api/stores` | the stores and whether each is writable — never a token |
 | `GET` `POST` `DELETE` | `/api/update` | update mode: status, on (returns the key), off |
 | `GET` | `…/types`, `…/types/:type/tags[/:key]` | types, tag names, a tag's values, with counts |
-| `GET` | `…/assets?type=&q=&tag.<k>=&link.<rel>=&unlinked=&retired=&view=&field.<f>=&limit=&page=&count=1` | a page of assets |
+| `GET` | `…/assets?type=&q=&tag.<k>=&link.<rel>=&unlinked=&retired=&view=&field.<f>=&file_hash=&description_hash=&text.<field>=&limit=&page=&count=1` | a page of assets |
 | `GET` | `…/assets/:id`, `…/assets/:id/object` | an asset with its links; its bytes (`?download=1` to save) |
+| `GET` | `…/assets/:id/recipe` | how it was made; 404 when it has no recipe |
 | `GET` | `…/assets/:id/links` | what it links to, and what links to it |
 | `GET` | `…/assets/:id/thumb/:file_hash?w=` | a webp thumbnail, width rounded up to a multiple of 64 |
 | `POST` | `…/check` | the store's consistency report |
-| `PATCH` `DELETE` | `…/assets/:id` | edit or delete — update mode |
+| `PATCH` `DELETE` | `…/assets/:id` | edit (`{tags, description, everywhere, rating, flagged, permanent, image}`) or delete — update mode |
 | `POST` `DELETE` | `…/assets/:id/links` | link (`{rel, name}` or `{rel, to}`, with optional `data`) or unlink (`?rel=&name=`) — update mode |
 | `POST` | `…/assets/:id/retire`, `…/assets/:id/reinstate` | hide and keep, or bring back — update mode |
 | `POST` | `…/prune` | `{type, keep_last, retired_before}`: delete retired assets for good — update mode |

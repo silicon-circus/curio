@@ -50,6 +50,8 @@ async fn fake_dd(seen: Seen) -> String {
                 ("DELETE", "/assets/1") => json(r#"{"deleted":1}"#),
                 ("POST", "/maintenance/check") => json(r#"{"missing_objects":[],"orphan_objects":[]}"#),
                 ("GET", "/assets/1/links") => json(r#"{"from":[],"to":[]}"#),
+                ("GET", "/assets/1/recipe") => json(r#"{"recipe":{"form":"picture","fields":{},"steps":[]}}"#),
+                ("GET", "/assets/2/recipe") => (StatusCode::NOT_FOUND, r#"{"error":"Asset 2 has no recipe"}"#).into_response(),
                 ("POST", "/assets/1/retire") | ("POST", "/assets/1/reinstate") => json(r#"{"asset":{"id":1}}"#),
                 ("POST", "/maintenance/prune") => json(r#"{"pruned":0}"#),
                 ("POST", "/maintenance/measure") => json(r#"{"measured":0}"#),
@@ -124,18 +126,20 @@ impl Drop for Rig {
 #[tokio::test]
 async fn reads_carry_the_read_token_and_never_the_write_token() {
     let r = Rig::new("reads").await;
-    for path in ["/api/stores/curated/types", "/api/stores/curated/assets?type=art&tag.venue=boardwalk"] {
+    for path in ["/api/stores/curated/types", "/api/stores/curated/assets?type=art&tag.venue=boardwalk",
+                 "/api/stores/curated/assets?text.style=overlore%3Asilver%402&description_hash=ab"] {
         let res = r.http.get(r.url(path)).send().await.unwrap();
         assert_eq!(res.status(), StatusCode::OK, "{path}");
     }
     let res = r.http.post(r.url("/api/stores/curated/check")).send().await.unwrap();
     assert_eq!(res.status(), StatusCode::OK, "the consistency check is a read");
     let seen = r.tokens_seen();
-    assert_eq!(seen.len(), 3);
+    assert_eq!(seen.len(), 4);
     for (m, at, token) in &seen {
         assert_eq!(token.as_deref(), Some("READ"), "{m} {at}");
     }
     assert_eq!(seen[1].1, "/assets?type=art&tag.venue=boardwalk", "the query reaches the store as written");
+    assert_eq!(seen[2].1, "/assets?text.style=overlore%3Asilver%402&description_hash=ab", "escapes and all");
 }
 
 #[tokio::test]
@@ -210,6 +214,22 @@ async fn links_are_read_with_the_read_token_and_changed_only_through_the_switch(
         (Method::POST, "/assets/1/links".to_string(), write.clone()),
         (Method::DELETE, "/assets/1/links?rel=used-by&name=boardwalk".to_string(), write),
     ], "an unlink's query reaches the store as written");
+}
+
+#[tokio::test]
+async fn a_recipe_is_a_read_and_one_missing_says_so() {
+    let r = Rig::new("recipe").await;
+    let res = r.http.get(r.url("/api/stores/curated/assets/1/recipe")).send().await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body: serde_json::Value = res.json().await.unwrap();
+    assert_eq!(body["recipe"]["form"], "picture");
+    let res = r.http.get(r.url("/api/stores/curated/assets/2/recipe")).send().await.unwrap();
+    assert_eq!(res.status(), StatusCode::NOT_FOUND, "the store's 404 for an asset with no recipe comes through");
+    let read = Some("READ".to_string());
+    assert_eq!(r.tokens_seen(), vec![
+        (Method::GET, "/assets/1/recipe".to_string(), read.clone()),
+        (Method::GET, "/assets/2/recipe".to_string(), read),
+    ]);
 }
 
 #[tokio::test]

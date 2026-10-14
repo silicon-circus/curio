@@ -49,6 +49,7 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route(&format!("{s}/assets/{{id}}"),
             get(routes::asset).patch(routes::update_asset).delete(routes::delete_asset))
         .route(&format!("{s}/assets/{{id}}/links"), get(routes::links).post(routes::link).delete(routes::unlink))
+        .route(&format!("{s}/assets/{{id}}/recipe"), get(routes::recipe))
         .route(&format!("{s}/assets/{{id}}/retire"), post(routes::retire))
         .route(&format!("{s}/assets/{{id}}/reinstate"), post(routes::reinstate))
         .route(&format!("{s}/assets/{{id}}/object"), get(routes::object))
