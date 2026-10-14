@@ -1,0 +1,9 @@
+# Settings for AI agents, and tools, working in this project.
+# See the dot-ai skill's references/config.md.
+handle: curio         # this project's handle: other agents write to @curio
+description: >        # what this project's agent does, shown to other agents
+  The agent for curio, the Silicon Circus web UI for DataDungeon stores:
+  search, browse and curate any store's assets, holding the tokens and a
+  red update-mode switch for writes. It also tends the park's asset store
+  (siliconcircus.lol/assets). Ask about curio's console, what it needs
+  from DataDungeon, or the park store.
