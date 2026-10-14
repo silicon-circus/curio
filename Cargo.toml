@@ -1,6 +1,6 @@
 [package]
 name = "curio"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 description = "A web UI for DataDungeon stores: filter by tags, see what is there, and curate it. Read-only until you say otherwise."
 authors = ["Thomas Sawyer <transfire@gmail.com>"]
