@@ -11,6 +11,9 @@ similar). Until that replica exists, the store has no off-machine copy.
 
 - **DD 0.13.0 since 2026-10-14** (assets `eae6eab`; 0.12.2 on 2026-10-13, `6e0ee9b`). Both moves are
   one way, so anything that opens the store directly must be on 0.13 too.
+- **DD 0.13.1 is out, and the store isn't on it yet.** On first open, 0.13.1 rebuilds the
+  named-texts table once; it's empty in this store. `@datadungeon` upgraded a copy, and nothing else
+  changed. **Open:** whether to move the store up waits for Thomas's OK.
 - **The 0.13 move was checked closely**, at Thomas's request. Against the backup:
   - every table is identical row for row, and the dropped `description` and `generation` columns
     were empty;

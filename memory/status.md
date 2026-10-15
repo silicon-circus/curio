@@ -19,6 +19,12 @@ asset, and an older store simply doesn't show the 0.13 parts.
 
 ## Open
 
+- **DD 0.13.1** (`4df221b`, 2026-10-14): a named text can now carry a purpose,
+  `owner:name/purpose@version` (`overlore:silver-comic/figure@2`). The filter `text.<field>=owner:name`
+  finds every purpose, and `owner:name/figure` finds one.
+  - curio works unchanged: "any version" strips only `@N`, so it keeps the purpose.
+  - Not built: an "any purpose" button (`owner:name`). Overlore will name its art-style wordings this
+    way (`figure`, `place`).
 - **DD 0.14 support, when DD releases it.** Planned there: standard types and `GET /vocabulary`,
   several values per tag, uses over HTTP with curio's override (see [decisions.md](decisions.md)), a
   409 plus force for deleting something in use, retyping one asset, and areas as 0–1 fractions. The
