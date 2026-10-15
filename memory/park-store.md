@@ -11,9 +11,11 @@ similar). Until that replica exists, the store has no off-machine copy.
 
 - **DD 0.13.0 since 2026-10-14** (assets `eae6eab`; 0.12.2 on 2026-10-13, `6e0ee9b`). Both moves are
   one way, so anything that opens the store directly must be on 0.13 too.
-- **DD 0.13.1 is out, and the store isn't on it yet.** On first open, 0.13.1 rebuilds the
-  named-texts table once; it's empty in this store. `@datadungeon` upgraded a copy, and nothing else
-  changed. **Open:** whether to move the store up waits for Thomas's OK.
+- **DD 0.13.1 since 2026-10-14** (assets `2f1d1ca`, at Thomas's OK). Its first open rebuilt the
+  named-texts table, which is empty here, with a `purpose` column. 0.13.0 can still open the store.
+  - Checked against the backup: every other table is identical, and so is every index and trigger.
+  - A 0.13.0 server and the 0.13.1 server answer the same for all 564 assets and 27 queries.
+  - Every file matches its hash, and the consistency check is clean.
 - **The 0.13 move was checked closely**, at Thomas's request. Against the backup:
   - every table is identical row for row, and the dropped `description` and `generation` columns
     were empty;
