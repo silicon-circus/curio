@@ -23,8 +23,9 @@ asset, and an older store simply doesn't show the 0.13 parts.
   `owner:name/purpose@version` (`overlore:silver-comic/figure@2`). The filter `text.<field>=owner:name`
   finds every purpose, and `owner:name/figure` finds one.
   - curio works unchanged: "any version" strips only `@N`, so it keeps the purpose.
-  - Not built: an "any purpose" button (`owner:name`). Overlore will name its art-style wordings this
-    way (`figure`, `place`).
+  - **Don't build an "any purpose" button.** Purposes are deprecated (Thomas, 2026-10-17), and a
+    later DD release removes them. They came in so that one style could be worded once for figures
+    and once for places. Framing is now its own part of a prompt, so one style wording serves both.
 - **DD 0.14 support, once DD tags it.** On 2026-10-17 `@datadungeon` wrote that 0.14 is rebuilt,
   simpler: committed as `4426581` on DD's `0.14` branch, not tagged yet. DD will write when it's
   tagged, and curio's pin (`~> 0.13.x`) holds until then. The message is
@@ -41,6 +42,14 @@ asset, and an older store simply doesn't show the 0.13 parts.
       version" button.
     - The `text.<kind>=` filter and its proxy (`src/routes.rs:178`) work unchanged.
   - **Still in:** the vocabulary (14 art styles, the ratings), `GET /vocabulary` and `ViewWords`.
+  - **Changed before the tag** (`791b22a`, 2026-10-17, Thomas: each app words its own styles;
+    `mail/received/20261017-165106Z-@datadungeon--0.14-each-app-words-its-own-styles-dd3641d0.md`):
+    - A picture's `style` wording may be the app's own (`owl:watercolor`), not only `dd:`. Pictures
+      are still tagged with the vocabulary's art styles.
+    - `flavor` is gone from the recommended order.
+    - `GET /vocabulary` gives each art style's and rating's words as `wording: {kind, name, text}`.
+      The first build called it `style`, but ratings have words now too (`dd:pg`), so the field
+      covers both, and `kind` says which.
   - **Dropped:** uses, owner tags, and refusing to delete what's in use. MatchIndex, per-app indexes,
     views, light and keyframes are frozen at what exists.
   - The message doesn't say whether these are still coming: several values per tag, retyping, areas
