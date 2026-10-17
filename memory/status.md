@@ -15,7 +15,7 @@ server and stays UI-free. The old server, which served the park's files by name,
 | 0.6.0 | 2026-10-14 | `accd565` | DD 0.13: the "How it was made" recipe panel, finding by a shared file, description or named wording, changing a shared description everywhere, Permanent |
 | 0.7.0 | 2026-10-17 | `ac96b8b` | DD 0.14: the recipe panel shows the prompt and instructions as sent, with each named wording marked; "any version" takes hash versions; a store with many types scrolls the type bar instead of widening the page |
 
-curio runs on DD 0.11.2 through 0.14. A 0.13 store is detected by `has_recipe` appearing on an
+curio runs on DD 0.11.2 through 0.15. A 0.13 store is detected by `has_recipe` appearing on an
 asset, and an older store simply doesn't show the 0.13 parts. A 0.14 recipe is told from a 0.13 one
 by its `wordings` list.
 
@@ -27,8 +27,9 @@ by its `wordings` list.
   - Wording names are `owner:name[@version]`. The purpose is gone, and a name with a `/` is refused.
   - `recipe_fields` is dropped. 0.14 had kept 0.13's prompt fields read-only.
   - A store from before 0.12 isn't converted any more: open it read-write with 0.14 first.
-  - **curio needs no change.** It never wrote or showed purposes. It hasn't been tried against a
-    0.15 `dd-serve` yet. Moving the park store to 0.15 is Thomas's call.
+  - **curio needs no change.** It never wrote or showed purposes. Thomas's curio 0.7.0 reads the
+    park store on 0.15 (all 564 assets, since 2026-10-17).
+  - The park store moved to 0.15 on 2026-10-17, at Thomas's word. See [park-store.md](park-store.md).
 - **DD 0.14.0 is tagged** (`401dd4a`, 2026-10-17;
   `mail/received/20261017-185402Z-@datadungeon--datadungeon-v0.14.0-is-tagged-948f3178.md`).
   - **A recipe is the prompt as sent.** `GET /assets/:id/recipe` gives `prompt`, `instructions`

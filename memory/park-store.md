@@ -9,14 +9,17 @@ similar). Until that replica exists, the store has no off-machine copy.
 
 ## Where it stands
 
-- **Earlier moves:** 0.12.2 on 2026-10-13 (`6e0ee9b`), and 0.13.0 on 2026-10-14 (`eae6eab`).
-- **DD 0.13.1 from 2026-10-14 to 2026-10-17** (assets `2f1d1ca`). Its first open rebuilt the
-  named-texts table, which is empty here, with a `purpose` column. 0.13.0 could still open it.
-  - Checked against the backup: every other table is identical, and so is every index and trigger.
-  - A 0.13.0 server and the 0.13.1 server answer the same for all 564 assets and 27 queries.
-  - Every file matches its hash, and the consistency check is clean.
-- **DD 0.14.0 since 2026-10-17** (assets `2c5fedd`, at Thomas's OK). It's one way: 0.13.1 can't open
-  the store, so anything that opens it directly must be on 0.14 too. The store has no recipes, so it
+- **DD 0.15.0 since 2026-10-17** (assets `bad3c6a`, at Thomas's word). It's one way again: 0.14 can't
+  open the store, so anything that opens it directly must be on 0.15 too. The store had no purposes
+  and no prompt fields, so the first open only dropped the empty `recipe_fields` table (and its two
+  indexes) and the wordings' `purpose` column. It was rehearsed on a copy first, and the live result
+  has the same schema.
+  - Checked against the backup served by 0.14.0: all 564 assets (1128 responses), 27 queries and the
+    vocabulary answer the same, and the store's scripts compile unchanged.
+  - Every other table holds the same rows. Integrity and foreign keys are ok, all 563 files match
+    their hashes and are the backup's files, `/objects` matches the disk, and the store's check is
+    clean.
+- **DD 0.14.0 from 2026-10-17, for a few hours** (assets `2c5fedd`). The store has no recipes, so it
   needed only the version bump and a `dd-serve` rebuild. It was rehearsed on a copy first, and the
   live result is the same, schema and all.
   - Checked against the backup served by 0.13.1: all 564 assets (1128 responses) and 27 queries
@@ -30,6 +33,12 @@ similar). Until that replica exists, the store has no off-machine copy.
   - Every other index and trigger is identical, and integrity and foreign keys are ok.
   - All 563 files match their hashes and are the same files as the backup. `/objects` matches the
     disk, and the store's check is clean.
+- **DD 0.13.1 from 2026-10-14 to 2026-10-17** (assets `2f1d1ca`). Its first open rebuilt the
+  named-texts table, which is empty here, with a `purpose` column. 0.13.0 could still open it.
+  - Checked against the backup: every other table is identical, and so is every index and trigger.
+  - A 0.13.0 server and the 0.13.1 server answer the same for all 564 assets and 27 queries.
+  - Every file matches its hash, and the consistency check is clean.
+- **Earlier moves:** 0.12.2 on 2026-10-13 (`6e0ee9b`), and 0.13.0 on 2026-10-14 (`eae6eab`).
 - **The 0.13 move was checked closely**, at Thomas's request. Against the backup:
   - every table is identical row for row, and the dropped `description` and `generation` columns
     were empty;
