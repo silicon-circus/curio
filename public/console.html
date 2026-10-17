@@ -43,7 +43,7 @@ html, body { height: 100%; }
 body {
   margin: 0; background: var(--board); color: var(--ink);
   font: 14px/1.45 var(--body);
-  display: grid; grid-template-rows: auto auto 1fr; overflow: hidden;
+  display: grid; grid-template-rows: auto auto 1fr; grid-template-columns: minmax(0, 1fr); overflow: hidden;
 }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
@@ -76,7 +76,9 @@ header {
   font: 13px var(--mono); width: 240px; padding: 6px 12px; border: 1px solid var(--rule);
   border-radius: 999px; background: var(--board);
 }
-.types { display: flex; gap: 2px; flex: 1; overflow-x: auto; scrollbar-width: thin; }
+/* min-width 0: a flex item won't shrink below its content otherwise, and a store with many types
+ * would widen the page past the window instead of scrolling the bar. */
+.types { display: flex; gap: 2px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
 .types button {
   border: 0; background: none; padding: 6px 12px; border-radius: 6px; white-space: nowrap;
   font: 500 15px var(--display);
@@ -541,6 +543,13 @@ function renderTypes() {
       h("button", { "aria-pressed": String(t.name === state.type), onclick: () => openType(t.name, {}),
         title: t.retired ? `${t.count} current, ${t.retired} retired` : null },
         t.name, h("span", { className: "n" }, t.count))));
+  // A store with many types scrolls the bar: keep the chosen one in sight. Only the bar scrolls,
+  // never the page.
+  const bar = $("types"), on = bar.querySelector('[aria-pressed="true"]');
+  if (on) {
+    const b = bar.getBoundingClientRect(), r = on.getBoundingClientRect();
+    if (r.left < b.left || r.right > b.right) bar.scrollLeft += r.left - b.left - 12;
+  }
 }
 
 // `name` null is every type. Tag filters belong to one type, so they start empty on a change of
