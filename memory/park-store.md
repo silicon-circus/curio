@@ -1,6 +1,6 @@
 # The park store
 
-*Updated 2026-10-14*
+*Updated 2026-10-17*
 
 `siliconcircus.lol/assets` is a DD store made on 2026-10-07 and curated through curio. Its README
 covers the types, keys and serving. It is a separate local repository, and Thomas decided on
@@ -47,6 +47,10 @@ similar). Until that replica exists, the store has no off-machine copy.
   - a one-way upgrade no longer forces every app to move at once.
 
   Where boardwalk's store will live under this plan is still open.
+- On 2026-10-16 he went further (relayed by `@datadungeon` on 2026-10-17): **one owner per store**.
+  Each store is one app's, and sharing means copying records into your own store (`copied-from`).
+  - This store holds two apps' assets: Cattacula's voices and boardwalk's props.
+  - **Open, for Thomas:** whose store this is, and what happens to the other app's assets.
 - Cattacula's switch to this store is **on hold** (2026-10-13). `@cattacula` confirmed on
   2026-10-14: Cattacula keeps its own `voices.db`, and is on DD 0.13.0 (cattacula `55587c5`).
 

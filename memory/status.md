@@ -1,6 +1,6 @@
 # Status
 
-*Updated 2026-10-14*
+*Updated 2026-10-17*
 
 curio is the web UI for DataDungeon (DD) stores. Thomas decided this on 2026-10-07: DD is the asset
 server and stays UI-free. The old server, which served the park's files by name, is tagged
@@ -25,11 +25,28 @@ asset, and an older store simply doesn't show the 0.13 parts.
   - curio works unchanged: "any version" strips only `@N`, so it keeps the purpose.
   - Not built: an "any purpose" button (`owner:name`). Overlore will name its art-style wordings this
     way (`figure`, `place`).
-- **DD 0.14 support, when DD releases it.** Planned there: standard types and `GET /vocabulary`,
-  several values per tag, uses over HTTP with curio's override (see [decisions.md](decisions.md)), a
-  409 plus force for deleting something in use, retyping one asset, and areas as 0–1 fractions. The
-  panel type is renamed `plug`, and there is a new `placard` type.
+- **DD 0.14 support, once DD tags it.** On 2026-10-17 `@datadungeon` wrote that 0.14 is rebuilt,
+  simpler: committed as `4426581` on DD's `0.14` branch, not tagged yet. DD will write when it's
+  tagged, and curio's pin (`~> 0.13.x`) holds until then. The message is
+  `mail/received/20261017-035543Z-@datadungeon--datadungeon-0.14-simplified-the-prompt-as-sent-and-faf305e4.md`.
+  - **A recipe is the prompt as sent.** There are no fields any more: `GET /assets/:id/recipe` gives
+    `prompt`, `instructions` (speech and chat only) and `wordings: [{kind, name, text}]`. Each
+    wording's words appear in the prompt or the instructions word for word.
+  - **A version is a hash:** the first 10 hex characters of the words' SHA-256
+    (`dd:silver-comic@12063ea05a`). `@2` gets a 400. DD's own owner is now `dd`, not `datadungeon`.
+  - **What curio must change:**
+    - `recipeView` and `stepView` (`public/console.html:1327-1370`) read `fields` and `prompt_sent`.
+      Show the prompt and instructions instead, and mark each wording where it sits.
+    - `named()` (`:1363`) strips the version with `/@\d+$/`, so a hex version loses its "any
+      version" button.
+    - The `text.<kind>=` filter and its proxy (`src/routes.rs:178`) work unchanged.
+  - **Still in:** the vocabulary (14 art styles, the ratings), `GET /vocabulary` and `ViewWords`.
+  - **Dropped:** uses, owner tags, and refusing to delete what's in use. MatchIndex, per-app indexes,
+    views, light and keyframes are frozen at what exists.
+  - The message doesn't say whether these are still coming: several values per tag, retyping, areas
+    as fractions, and `plug`/`placard`. Check DD's changelog at the tag. The 2026-10-15 description
+    of 0.14 it replaces never reached `@curio`.
 - **Still DD's to add:** orders other than newest first, and range requests (seeking long media).
   They are listed in the README.
-- **The hub waits** until Thomas says so. See [hub.md](hub.md).
+- **The hub is deferred** (Thomas, 2026-10-16, relayed by `@datadungeon`). See [hub.md](hub.md).
 - The park store's own open items are in [park-store.md](park-store.md).

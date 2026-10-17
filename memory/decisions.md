@@ -1,6 +1,6 @@
 # Decisions the code doesn't explain
 
-*Updated 2026-10-14*
+*Updated 2026-10-17*
 
 All made by Thomas. The README describes how each one works; this note keeps the reasons and how
 settled each is, so nobody reopens them.
@@ -13,7 +13,9 @@ settled each is, so nobody reopens them.
   170 px tall.
 - **curio has override permission** (2026-10-13). It's the curator's tool, so it may drop any app's
   use of an asset and delete an asset that is in use, with a person confirming. Other apps act only on
-  their own uses. This shapes curio's DD 0.14 support.
+  their own uses. It was meant to shape curio's DD 0.14 support, but as of 2026-10-17 uses and
+  refusing to delete what's in use are dropped from DD's plans (see [status.md](status.md)). The
+  decision stands for whenever something like them returns.
 - **Ask DD for API additions rather than working around them.** curio holds no assets and no
   database: whatever it shows comes from a store's API. Before changing how curio uses that API, read
   DD's `.ai/memory/handoff.md` and `src/data_dungeon/http.cr`.

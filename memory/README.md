@@ -14,10 +14,10 @@ working on the code needs belongs in the project's own docs, not here.
 
 | File | What it holds |
 |---|---|
-| [status.md](status.md) | Releases, which DataDungeon versions curio runs on, and what's open (DD 0.14 support) |
+| [status.md](status.md) | Releases, which DataDungeon versions curio runs on, and what's open (DD 0.14 support: the prompt as sent, hash versions) |
 | [decisions.md](decisions.md) | Thomas's decisions the code doesn't explain: the update-mode lock, one-screen pages, curio's override |
-| [park-store.md](park-store.md) | The park store (`siliconcircus.lol/assets`): DD 0.13 and how the move was checked, store per app, keying, open items |
-| [hub.md](hub.md) | The hub that will know every store: the plan, and that it waits |
+| [park-store.md](park-store.md) | The park store (`siliconcircus.lol/assets`): DD 0.13 and how the move was checked, one owner per store, keying, open items |
+| [hub.md](hub.md) | The hub that would know every store: deferred since 2026-10-16 (one owner per store), the earlier plan |
 | [coordination.md](coordination.md) | `@curio`, when mail needs Thomas's OK, and who curio talks to |
 
 Keep each note short and dated (`*Updated YYYY-MM-DD*`), with absolute
