@@ -19,7 +19,7 @@ tagged `v0.3.2-server`.*
 | | |
 |---|---|
 | **Rust** stable (1.90+) | `cargo build --release`; the only build step |
-| a DataDungeon store, **0.11.2 or later** | reachable over its API: `dd-serve` beside a database, or an app that mounts `DataDungeon::API`. curio uses its search, links, paging, retiring and picture fields; from **0.13**, recipes, shared descriptions and `permanent`, which an older store simply doesn't show |
+| a DataDungeon store, **0.11.2 or later** | reachable over its API: `dd-serve` beside a database, or an app that mounts `DataDungeon::API`. curio uses its search, links, paging, retiring and picture fields; from **0.13**, recipes, shared descriptions and `permanent`, which an older store simply doesn't show; from **0.14**, recipes as sent, with their wordings |
 | `just` *(optional)* | remembers the commands; nothing requires it |
 
 ## Configuring stores
@@ -127,11 +127,13 @@ or a preview in the detail panel instead of a thumbnail.
   sits on the checkerboard and any other picture on its own dominant colour, which is also what shows
   while its thumbnail loads; a picture with a view is labelled with it.
 - **How it was made** in the detail panel: the recipe DataDungeon keeps (0.13), in the shape every
-  app shares. It shows the settings, the cost and where that figure came from, and the prompt by
-  field, in the order the fields are joined. If the provider was sent something other than the fields
-  joined, what it was sent is shown with the difference marked; that's a camera adding words of its
-  own. A named wording (`overlore:silver@2`) lists every asset that used exactly it, and *any
-  version* every asset that used the name. *Made from* lists the files it was made from; each opens
+  app shares. It shows the settings, the cost and where that figure came from, and what the provider
+  was sent. From 0.14 that's the prompt, and for speech or chat the instructions, as sent, with each
+  named wording that went into it marked where its words sit, and the wordings listed by kind. A 0.13
+  store keeps the prompt by field, shown in the order the fields are joined; if the provider was sent
+  something else, what it was sent is shown with the difference marked (a camera adding words of its
+  own). A named wording (`overlore:silver-comic@860f00fedb`, or `@2` before 0.14) lists every asset
+  that used exactly it, and *any version* every asset that used the name. *Made from* lists the files it was made from; each opens
   the asset holding it, or says no asset in this store does. An asset made in steps shows each step.
   Assets stored before recipes show their old record as it was written. *Shared by N assets* under a
   description lists them. Each of these is a chip above the grid, across every type, and in the URL.

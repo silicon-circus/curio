@@ -271,6 +271,10 @@ table.prompt td.v { font-family: var(--body); }
 button.tiny.name { color: var(--teal); font-family: var(--mono); }
 .sent { font: 12px/1.45 var(--mono); }
 .sent mark { background: color-mix(in srgb, var(--amber) 35%, transparent); color: inherit; border-radius: 2px; }
+.said { font-size: 13px; }
+.said mark { background: var(--teal-soft); color: inherit; border-radius: 2px; box-shadow: inset 0 -1px 0 var(--teal); }
+dl.wordings dd .named { margin-top: 0; }
+dl.wordings dd .desc { display: block; font-family: var(--body); margin-bottom: 3px; }
 label.everywhere { display: flex; align-items: center; gap: 6px; font-size: 12.5px; margin-top: 6px; }
 textarea { width: 100%; min-height: 88px; border: 1px solid var(--rule); border-radius: 6px; padding: 6px 8px; background: var(--board); resize: vertical; }
 .stars { display: inline-flex; gap: 2px; }
@@ -1312,9 +1316,11 @@ async function unlinkIt(id, l) {
 function pretty(s) { try { return JSON.stringify(JSON.parse(s), null, 2); } catch { return s; } }
 
 /* HOW IT WAS MADE: the recipe DataDungeon keeps since 0.13, in the shape every app shares — the
- * settings, the prompt by field in the order they are joined, and what it was made from. A named
- * wording (`overlore:silver@2`) finds every asset that used it; a reference, the asset holding that
- * file. Assets stored before recipes keep their old record, free-form, until their app moves it. */
+ * settings, what the provider was sent, and what it was made from. Since 0.14 that is the prompt
+ * (and instructions) as sent, with the named wordings it used marked where they sit; 0.13 kept it
+ * by field. A named wording (`overlore:silver-comic@860f00fedb`) finds every asset that used it; a
+ * reference, the asset holding that file. Assets stored before recipes keep their old record,
+ * free-form, until their app moves it. */
 function madeSection(a, x) {
   if (a.has_recipe) return h("div", { className: "made" },
     h("p", { className: "eyebrow" }, "How it was made"),
@@ -1331,19 +1337,62 @@ function recipeView(r) {
 }
 
 function stepView(r) {
-  const fields = Object.entries(r.fields || {});
   const facts = [
     ["made", r.generated_at],
     ["cost", r.cost != null ? `$${Number(r.cost.toPrecision(3))}${r.cost_basis ? ` (${r.cost_basis})` : ""}` : null],
     ["seed", r.seed],
     ...Object.entries(r.settings || {}).map(([k, v]) => [k, typeof v === "string" ? v : JSON.stringify(v)]),
   ].filter(([, v]) => v != null && v !== "");
-  // What the provider was sent, when it isn't simply the fields joined by one space: a camera that
-  // adds words of its own shows here, with them marked.
-  const joined = fields.map(([, t]) => t.text).filter(Boolean).join(" ");
-  const sent = r.prompt_sent;
   return h("div", { className: "made" },
     facts.length ? h("dl", { className: "facts" }, ...facts.flatMap(([k, v]) => [h("dt", null, k), h("dd", null, String(v))])) : null,
+    ...(Array.isArray(r.wordings) ? sentView(r) : fieldsView(r)),
+    r.references && r.references.length ? h("div", null, h("p", { className: "what" }, "Made from"),
+      h("div", { className: "row", style: "gap:4px" }, ...r.references.map((hash) => h("button", {
+        className: "tiny mono", title: `Find the asset holding ${hash}`, onclick: () => setFind({ param: "file_hash", value: hash }),
+      }, hash.slice(0, 12) + "…")))) : null);
+}
+
+// DataDungeon 0.14: the prompt and instructions as the provider was sent them, each named wording
+// marked where its words sit (the store checks they're there, word for word), then the wordings.
+function sentView(r) {
+  const inputs = [[r.form === "speech" ? "Spoken" : "Prompt", r.prompt], ["Instructions", r.instructions]]
+    .filter(([, text]) => text);
+  const found = new Set();
+  const out = inputs.map(([what, text]) => h("div", null, h("p", { className: "what" }, what),
+    h("p", { className: "desc said" }, ...wordingsIn(text, r.wordings, found))));
+  if (r.wordings.length) out.push(h("div", null, h("p", { className: "what" }, "Wordings"),
+    h("dl", { className: "facts wordings" }, ...r.wordings.flatMap((w) => [h("dt", null, w.kind),
+      h("dd", null, found.has(w) ? null : h("span", { className: "desc said" }, w.text), named(w.kind, w.name))]))));
+  return out;
+}
+
+// `text`, with each wording's words marked at their first place in it that no other wording took.
+function wordingsIn(text, wordings, found) {
+  const spans = [];
+  for (const w of wordings) {
+    let at = w.text ? text.indexOf(w.text) : -1;
+    while (at >= 0 && spans.some((s) => at < s.end && s.start < at + w.text.length)) at = text.indexOf(w.text, at + 1);
+    if (at >= 0) { spans.push({ start: at, end: at + w.text.length, w }); found.add(w); }
+  }
+  spans.sort((a, b) => a.start - b.start);
+  const parts = [];
+  let p = 0;
+  for (const s of spans) {
+    parts.push(text.slice(p, s.start), h("mark", { title: `${s.w.kind}: ${s.w.name}` }, text.slice(s.start, s.end)));
+    p = s.end;
+  }
+  parts.push(text.slice(p));
+  return parts;
+}
+
+// DataDungeon 0.13: the prompt by field, in the order they are joined, then what the provider was
+// sent when it isn't simply the fields joined by one space (a camera that adds words of its own),
+// with that marked.
+function fieldsView(r) {
+  const fields = Object.entries(r.fields || {});
+  const joined = fields.map(([, t]) => t.text).filter(Boolean).join(" ");
+  const sent = r.prompt_sent;
+  return [
     fields.length ? h("div", null, h("p", { className: "what" }, r.form === "speech" ? "Spoken" : "Prompt"),
       h("table", { className: "tags prompt" }, h("tbody", null, ...fields.map(([field, t]) => h("tr", null,
         h("td", { className: "k" }, field),
@@ -1352,16 +1401,14 @@ function stepView(r) {
       : sent === joined ? h("p", { className: "mute", style: "margin:0; font-size:12.5px" }, "Sent as written: the fields joined.")
       : h("div", null, h("p", { className: "what" }, "What the provider was sent"),
           h("p", { className: "desc sent", title: "Marked: what differs from the fields joined" }, ...marked(joined, sent))),
-    r.references && r.references.length ? h("div", null, h("p", { className: "what" }, "Made from"),
-      h("div", { className: "row", style: "gap:4px" }, ...r.references.map((hash) => h("button", {
-        className: "tiny mono", title: `Find the asset holding ${hash}`, onclick: () => setFind({ param: "file_hash", value: hash }),
-      }, hash.slice(0, 12) + "…")))) : null);
+  ];
 }
 
 // A named wording: its version finds the assets that used exactly these words; "any version", the
-// assets that used the name at all.
+// assets that used the name at all. A version is a number up to 0.13, and from 0.14 the first 10
+// hex characters of the words' SHA-256.
 function named(field, name) {
-  const base = name.replace(/@\d+$/, "");
+  const base = name.replace(/@[0-9a-f]+$/, "");
   return h("span", { className: "named" },
     h("button", { className: "tiny name", title: `Every asset whose ${field} is this wording`,
       onclick: () => setFind({ param: "text." + field, value: name }) }, name),
