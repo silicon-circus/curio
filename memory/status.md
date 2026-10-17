@@ -47,9 +47,7 @@ by its `wordings` list.
   - **Fixed in `97b8874`:** a store with many types (Overlore has 15) made the type bar wider than
     the window, so the page scrolled sideways and the detail panel went off-screen. This had been
     so since before 0.14. The bar now scrolls on its own and keeps the chosen type in sight.
-  - Thomas's running curio is still the 0.6.0 build until it's restarted. The session's permission
-    check refused the restart (2026-10-17), so it waits for him. 0.6.0 works with the 0.14 park store,
-    which has no recipes.
+  - Thomas's curio has run 0.7.0 since 2026-10-17.
 - **Still DD's to add:** orders other than newest first, and range requests (seeking long media).
   They are listed in the README.
 - **The hub is deferred** (Thomas, 2026-10-16, relayed by `@datadungeon`). See [hub.md](hub.md).
