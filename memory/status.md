@@ -13,9 +13,11 @@ server and stays UI-free. The old server, which served the park's files by name,
 | 0.4.0 | 2026-10-09 | `510fadd` | the DD web UI |
 | 0.5.0 | 2026-10-13 | `b7e8924` | runs on DD 0.12.x: the key from 0.12, falling back to `pool_key` |
 | 0.6.0 | 2026-10-14 | `accd565` | DD 0.13: the "How it was made" recipe panel, finding by a shared file, description or named wording, changing a shared description everywhere, Permanent |
+| 0.7.0 | 2026-10-17 | `ac96b8b` | DD 0.14: the recipe panel shows the prompt and instructions as sent, with each named wording marked; "any version" takes hash versions; a store with many types scrolls the type bar instead of widening the page |
 
-curio runs on DD 0.11.2 through 0.13. A 0.13 store is detected by `has_recipe` appearing on an
-asset, and an older store simply doesn't show the 0.13 parts.
+curio runs on DD 0.11.2 through 0.14. A 0.13 store is detected by `has_recipe` appearing on an
+asset, and an older store simply doesn't show the 0.13 parts. A 0.14 recipe is told from a 0.13 one
+by its `wordings` list.
 
 ## Open
 
@@ -37,23 +39,15 @@ asset, and an older store simply doesn't show the 0.13 parts.
     views, light and keyframes are frozen at what exists. Not in 0.14 either: several values per tag,
     retyping, areas as fractions, and `plug`/`placard`.
   - The messages before the tag are in `mail/received/` from 2026-10-17.
-- **curio's 0.14 support: committed, not released** (`7c5a761`, 2026-10-17, unpushed).
-  - The recipe panel shows a 0.14 recipe's prompt and instructions as sent. Each wording is marked
-    where its words sit, and the wordings are listed by kind. A 0.13 recipe still shows by field.
-  - "Any version" strips hex versions as well as numbers.
-  - The README says what 0.14 shows.
-  - **Tested** on scratch copies of Overlore's store (916 recipes), one converted by 0.14 and one
-    left on 0.13.1:
-    - a picture with a style wording;
-    - speech with instructions;
-    - the wording finds;
-    - made-up recipes with repeated, missing and instruction-side wordings.
-    The 32 tests pass.
-  - **Open:** releasing it (0.7.0?) and pushing are Thomas's call.
-- **Bug, older than 0.14:** a store with many types (Overlore has 15) makes the type bar wider than
-  the window. The whole page then scrolls sideways (2577 px at 1600), pushing the detail panel
-  off-screen. curio 0.6.0 does it too. That breaks Thomas's one-screen rule, so it's worth fixing
-  ([decisions.md](decisions.md)).
+- **curio's 0.14 support shipped in 0.7.0** (`7c5a761`, released as `ac96b8b`, tag `v0.7.0`, pushed
+  2026-10-17).
+  - Tested on scratch copies of Overlore's store (916 recipes), one converted by 0.14 and one left on
+    0.13.1. The cases: a picture with a style wording, speech with instructions, the wording finds,
+    and made-up recipes with repeated, missing and instruction-side wordings. The 32 tests pass.
+  - **Fixed in `97b8874`:** a store with many types (Overlore has 15) made the type bar wider than
+    the window, so the page scrolled sideways and the detail panel went off-screen. This had been
+    so since before 0.14. The bar now scrolls on its own and keeps the chosen type in sight.
+  - Thomas's running curio is still the 0.6.0 build until it's restarted.
 - **Still DD's to add:** orders other than newest first, and range requests (seeking long media).
   They are listed in the README.
 - **The hub is deferred** (Thomas, 2026-10-16, relayed by `@datadungeon`). See [hub.md](hub.md).

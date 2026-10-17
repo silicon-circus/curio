@@ -16,7 +16,8 @@ similar). Until that replica exists, the store has no off-machine copy.
   - Checked against the backup: every other table is identical, and so is every index and trigger.
   - A 0.13.0 server and the 0.13.1 server answer the same for all 564 assets and 27 queries.
   - Every file matches its hash, and the consistency check is clean.
-- **DD 0.14: rehearsed on a copy, live move waiting for Thomas's OK** (2026-10-17). The store has no
+- **DD 0.14: rehearsed on a copy, live move not done yet** (2026-10-17). Thomas OK'd it the same day, but
+  the session's permission check refused changes to this repo, so it waits for him. The store has no
   recipes, so per `@datadungeon` it needs only the version bump and a `dd-serve` rebuild. The move
   is one way: 0.13.1 can't open a 0.14 store.
   - A copy opened by a 0.14 `dd-serve` (built from `~> 0.14.0`, which locks 0.14.0) answers the
