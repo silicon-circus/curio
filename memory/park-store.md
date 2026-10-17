@@ -36,23 +36,26 @@ similar). Until that replica exists, the store has no off-machine copy.
   - Store a tweaked picture as a new take that `supersedes` the old one. The old one is retired, and
     its `used-by` link carries over.
 
-## One store for the park: not settled
+## Whose store: boardwalk's (Thomas, 2026-10-17)
 
-- On 2026-10-07 Thomas said to turn Cattacula's store into the park store. He was still deciding,
-  and I over-read it as a decision.
-- On 2026-10-14 he settled it (relayed by `@datadungeon`): **each app gets its own store**, all
-  sharing one bucket, and curio builds the hub ([hub.md](hub.md)).
-- His reasons:
-  - a corrupted or lost store takes down only its own app;
-  - a one-way upgrade no longer forces every app to move at once.
-
-  Where boardwalk's store will live under this plan is still open.
-- On 2026-10-16 he went further (relayed by `@datadungeon` on 2026-10-17): **one owner per store**.
-  Each store is one app's, and sharing means copying records into your own store (`copied-from`).
-  - This store holds two apps' assets: Cattacula's voices and boardwalk's props.
-  - **Open, for Thomas:** whose store this is, and what happens to the other app's assets.
-- Cattacula's switch to this store is **on hold** (2026-10-13). `@cattacula` confirmed on
-  2026-10-14: Cattacula keeps its own `voices.db`, and is on DD 0.13.0 (cattacula `55587c5`).
+- **This is boardwalk's store,** separate from Cattacula's. Thomas decided on 2026-10-17, after
+  choosing **one owner per store** on 2026-10-16 (relayed by `@datadungeon`). Under that rule each
+  store is one app's, and sharing means copying records into your own store (`copied-from`).
+- **Cattacula's 488 voices stay here for now, as a backup of sorts.** Thomas doesn't want to risk
+  losing them, so don't remove them unless he asks. Cattacula's own `voices.db` remains its store.
+  - The copies are a snapshot from when they were copied, not kept in step with Cattacula.
+  - They sit on the same machine as Cattacula's own store, with no off-machine copy until the
+    replica exists.
+- Cattacula's switch to this store was put on hold on 2026-10-13, and this decision ends it.
+  `@cattacula` confirmed on 2026-10-14 that Cattacula keeps its own `voices.db`, on DD 0.13.0
+  (cattacula `55587c5`).
+- **How it got here:**
+  - On 2026-10-07 Thomas said to turn Cattacula's store into the park store. He was still deciding,
+    and I over-read it as a decision.
+  - On 2026-10-14 he chose a store per app. His reasons: a corrupted or lost store takes down only its
+    own app, and a one-way upgrade no longer forces every app to move at once.
+- **Still open:** whether the store stays at `siliconcircus.lol/assets` or moves in with boardwalk,
+  and whether its README and name should stop calling it the park's.
 
 ## Settled ways of keying (Thomas, 2026-10-08 and 2026-10-09)
 

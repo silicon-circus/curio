@@ -1,6 +1,6 @@
 # Coordination
 
-*Updated 2026-10-14*
+*Updated 2026-10-17*
 
 This project's address is `@curio`, on the Arcana bus and in `mail/`. The whole correspondence is in
 `mail/sent/` and `mail/received/`. Mail before 2026-10-14 was filed there from the session
@@ -20,7 +20,7 @@ never email.
 | Address | About |
 |---|---|
 | `@datadungeon` | DD's API. curio reviews DD designs and asks for API additions (the 0.13 asks were all accepted), and the hub's needs went to it |
-| `@cattacula` | Cattacula's switch to the park store, on hold since 2026-10-13 |
+| `@cattacula` | Cattacula's switch to the park store: on hold from 2026-10-13, off since 2026-10-17 (the store is boardwalk's) |
 | `@pirateship` | Also moving to DD 0.13; nothing exchanged yet |
 
 One message from `@codex` (2026-10-03) concerned another project's backup protocol, not curio. It
