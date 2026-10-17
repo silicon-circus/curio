@@ -9,19 +9,18 @@ similar). Until that replica exists, the store has no off-machine copy.
 
 ## Where it stands
 
-- **DD 0.13.0 since 2026-10-14** (assets `eae6eab`; 0.12.2 on 2026-10-13, `6e0ee9b`). Both moves are
-  one way, so anything that opens the store directly must be on 0.13 too.
-- **DD 0.13.1 since 2026-10-14** (assets `2f1d1ca`, at Thomas's OK). Its first open rebuilt the
-  named-texts table, which is empty here, with a `purpose` column. 0.13.0 can still open the store.
+- **Earlier moves:** 0.12.2 on 2026-10-13 (`6e0ee9b`), and 0.13.0 on 2026-10-14 (`eae6eab`).
+- **DD 0.13.1 from 2026-10-14 to 2026-10-17** (assets `2f1d1ca`). Its first open rebuilt the
+  named-texts table, which is empty here, with a `purpose` column. 0.13.0 could still open it.
   - Checked against the backup: every other table is identical, and so is every index and trigger.
   - A 0.13.0 server and the 0.13.1 server answer the same for all 564 assets and 27 queries.
   - Every file matches its hash, and the consistency check is clean.
-- **DD 0.14: rehearsed on a copy, live move not done yet** (2026-10-17). Thomas OK'd it the same day, but
-  the session's permission check refused changes to this repo, so it waits for him. The store has no
-  recipes, so per `@datadungeon` it needs only the version bump and a `dd-serve` rebuild. The move
-  is one way: 0.13.1 can't open a 0.14 store.
-  - A copy opened by a 0.14 `dd-serve` (built from `~> 0.14.0`, which locks 0.14.0) answers the
-    same as the live 0.13.1 store for all 564 assets (1128 responses) and 27 queries.
+- **DD 0.14.0 since 2026-10-17** (assets `2c5fedd`, at Thomas's OK). It's one way: 0.13.1 can't open
+  the store, so anything that opens it directly must be on 0.14 too. The store has no recipes, so it
+  needed only the version bump and a `dd-serve` rebuild. It was rehearsed on a copy first, and the
+  live result is the same, schema and all.
+  - Checked against the backup served by 0.13.1: all 564 assets (1128 responses) and 27 queries
+    answer the same, and the store's scripts compile unchanged.
   - Every table holds the same rows. The changes are the ones 0.14 means to make:
     - `named_texts` and `texts` gain DD's 4 rating wordings (`dd:g`, `dd:pg`, `dd:r`, `dd:x`);
     - the vocabulary tables are new (1 tag, 4 values), and so is `recipe_wordings` (empty);
@@ -29,7 +28,8 @@ similar). Until that replica exists, the store has no off-machine copy.
       and `instructions_id`, with no rows either way;
     - the new tables bring one index and two triggers that refuse changing or deleting a wording.
   - Every other index and trigger is identical, and integrity and foreign keys are ok.
-  - All 563 files match their hashes, `/objects` matches the disk, and the store's check is clean.
+  - All 563 files match their hashes and are the same files as the backup. `/objects` matches the
+    disk, and the store's check is clean.
 - **The 0.13 move was checked closely**, at Thomas's request. Against the backup:
   - every table is identical row for row, and the dropped `description` and `generation` columns
     were empty;
