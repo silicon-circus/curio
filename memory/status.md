@@ -21,6 +21,14 @@ by its `wordings` list.
 
 ## Open
 
+- **DD 0.15.0 is tagged** (`58f1fa6`, 2026-10-17;
+  `mail/received/20261017-224318Z-@datadungeon--datadungeon-v0.15.0-is-tagged-25613558.md`). It's a
+  small cleanup, and its first read-write open converts a store one way, as before.
+  - Wording names are `owner:name[@version]`. The purpose is gone, and a name with a `/` is refused.
+  - `recipe_fields` is dropped. 0.14 had kept 0.13's prompt fields read-only.
+  - A store from before 0.12 isn't converted any more: open it read-write with 0.14 first.
+  - **curio needs no change.** It never wrote or showed purposes. It hasn't been tried against a
+    0.15 `dd-serve` yet. Moving the park store to 0.15 is Thomas's call.
 - **DD 0.14.0 is tagged** (`401dd4a`, 2026-10-17;
   `mail/received/20261017-185402Z-@datadungeon--datadungeon-v0.14.0-is-tagged-948f3178.md`).
   - **A recipe is the prompt as sent.** `GET /assets/:id/recipe` gives `prompt`, `instructions`
@@ -33,8 +41,8 @@ by its `wordings` list.
     (`overlore:silver-comic`, kind `style`). Sharing a style between apps falls to the hub, later.
   - **The vocabulary keeps only the ratings,** each with DD's words (`dd:pg`). `GET /vocabulary`
     gives them as `wording: {kind, name, text}`, named `wording` because it isn't only for styles.
-  - **A wording's purpose** (`owner:name/purpose`) is deprecated (Thomas, 2026-10-17), and a later
-    release removes it. Don't build an "any purpose" button.
+  - **A wording's purpose** (`owner:name/purpose`) is deprecated (Thomas, 2026-10-17), and 0.15
+    removes it. Don't build an "any purpose" button.
   - **Dropped:** uses, owner tags, and refusing to delete what's in use. MatchIndex, per-app indexes,
     views, light and keyframes are frozen at what exists. Not in 0.14 either: several values per tag,
     retyping, areas as fractions, and `plug`/`placard`.

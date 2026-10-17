@@ -14,7 +14,7 @@ working on the code needs belongs in the project's own docs, not here.
 
 | File | What it holds |
 |---|---|
-| [status.md](status.md) | Releases, which DataDungeon versions curio runs on, and what's open (DD 0.14 support: the prompt as sent, hash versions) |
+| [status.md](status.md) | Releases, which DataDungeon versions curio runs on, and what's open (DD 0.14 support: the prompt as sent, hash versions; DD 0.15 tagged) |
 | [decisions.md](decisions.md) | Thomas's decisions the code doesn't explain: the update-mode lock, one-screen pages, curio's override |
 | [park-store.md](park-store.md) | The park store (`siliconcircus.lol/assets`): DD 0.13 and how the move was checked, boardwalk's store, with Cattacula's voices kept as a backup, keying, open items |
 | [hub.md](hub.md) | The hub that would know every store: deferred since 2026-10-16 (one owner per store), the earlier plan |
