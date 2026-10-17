@@ -28,7 +28,8 @@ similar). Until that replica exists, the store has no off-machine copy.
   - 76 boardwalk props (`prop`), each linked `used-by` boardwalk.
 
   The rest of boardwalk's art isn't imported yet. It waits on Thomas's vocabulary decisions: art
-  style values, and lighting or condition.
+  style values, and lighting or condition. Since 2026-10-17 DD has no standard art styles, so the
+  style values are boardwalk's own to name (see [Art style](#art-style)).
 - **#584 and #585**, the piggybank sprite as `16-bit` and as `32-bit`, are the same file on purpose.
   Thomas says one picture works for both, and he'll probably tweak one so they differ.
   - That matters: since 0.11, DD has refused the same bytes twice in one type (`AlreadyStored`).
@@ -72,6 +73,10 @@ similar). Until that replica exists, the store has no off-machine copy.
   out it's only a coarse form of the view vector.
 
 ## Art style
+
+**The styles are boardwalk's own.** DD 0.14 has no standard art styles (Thomas, 2026-10-17): each app
+names, words and tags its own, as `boardwalk:<style>` wordings of kind `style` with tag values of
+its own. The props' own `style` values (`real`, `8-bit`, `16-bit`, `32-bit`) aren't touched.
 
 Thomas, thinking aloud on 2026-10-13, not decided:
 - `pixel32` might be made by pixelizing photoreal on the fly.

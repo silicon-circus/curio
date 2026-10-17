@@ -12,6 +12,9 @@ The hub is deferred, and the plan below no longer stands as written:
 - The shared R2 bucket is never deleted from, so the hub's clearing job is gone.
 - Uses, owner tags, and refusing to delete what's in use are dropped from DD's plans, so there are
   no cross-store use counts to gather.
+- One job is newly the hub's, later (Thomas, 2026-10-17): **sharing styles between apps.** DD has no
+  standard styles, so the hub would keep a lookup of the styles each store uses. One store could
+  then adopt another's style, with its name and words. Nothing is needed for this now.
 
 Before that (2026-10-14), Thomas had said the hub waits until the other work is done.
 

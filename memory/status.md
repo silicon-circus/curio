@@ -41,15 +41,19 @@ asset, and an older store simply doesn't show the 0.13 parts.
     - `named()` (`:1363`) strips the version with `/@\d+$/`, so a hex version loses its "any
       version" button.
     - The `text.<kind>=` filter and its proxy (`src/routes.rs:178`) work unchanged.
-  - **Still in:** the vocabulary (14 art styles, the ratings), `GET /vocabulary` and `ViewWords`.
-  - **Changed before the tag** (`791b22a`, 2026-10-17, Thomas: each app words its own styles;
-    `mail/received/20261017-165106Z-@datadungeon--0.14-each-app-words-its-own-styles-dd3641d0.md`):
-    - A picture's `style` wording may be the app's own (`owl:watercolor`), not only `dd:`. Pictures
-      are still tagged with the vocabulary's art styles.
+  - **No standard art styles** (Thomas, 2026-10-17; DD `791b22a`, then `401dd4a`). Each app names,
+    words and tags its own styles (`owl:watercolor`, `overlore:silver-comic`, kind `style`), with tag
+    values of its own.
+    - The vocabulary keeps only the ratings, with DD's words for each (`dd:pg`). `GET /vocabulary`
+      lists only `rating`, each with its words as `wording: {kind, name, text}`. The field is called
+      `wording`, not `style`, because it isn't only for styles.
+    - Sharing a style between apps falls to the hub, later.
     - `flavor` is gone from the recommended order.
-    - `GET /vocabulary` gives each art style's and rating's words as `wording: {kind, name, text}`.
-      The first build called it `style`, but ratings have words now too (`dd:pg`), so the field
-      covers both, and `kind` says which.
+    - The messages:
+      `mail/received/20261017-165106Z-@datadungeon--0.14-each-app-words-its-own-styles-dd3641d0.md`
+      and its correction,
+      `mail/received/20261017-175719Z-@datadungeon--0.14-no-standard-styles-a-correction-e05c04a8.md`.
+  - **Still in:** `ViewWords`.
   - **Dropped:** uses, owner tags, and refusing to delete what's in use. MatchIndex, per-app indexes,
     views, light and keyframes are frozen at what exists.
   - The message doesn't say whether these are still coming: several values per tag, retyping, areas
