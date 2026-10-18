@@ -59,5 +59,13 @@ by its `wordings` list.
   - Thomas's curio has run 0.7.0 since 2026-10-17.
 - **Still DD's to add:** orders other than newest first, and range requests (seeking long media).
   They are listed in the README.
+- **Idea, not decided: a curio store as a clipboard** (Thomas, 2026-10-17). curio would get a DD store
+  of its own as a holding place: boardwalk's art waiting on vocabulary could wait there, and assets
+  would pass through it between apps' stores, marked `copied-from`. Points raised:
+  - Things have to leave it, or it becomes a store no app owns. No app should use anything from it.
+  - Types must match the destination's, or keys change on paste.
+  - curio can't add assets yet (no upload or copy). Still to check: whether dd-serve accepts new
+    assets over HTTP.
+  - Ask `@datadungeon` first whether copying between stores is planned. Hold that mail for Thomas.
 - **The hub is deferred** (Thomas, 2026-10-16, relayed by `@datadungeon`). See [hub.md](hub.md).
 - The park store's own open items are in [park-store.md](park-store.md).
