@@ -87,6 +87,26 @@ similar). Until that replica exists, the store has no off-machine copy.
 - **Still open:** whether the store stays at `siliconcircus.lol/assets` or moves in with boardwalk,
   and whether its README and name should stop calling it the park's.
 
+## How the park gets its art (2026-10-19)
+
+`@boardwalk` asked how the park would draw from this store instead of curio's `/a/`
+(`mail/received/20261019-224126Z-@boardwalk--boardwalk-and-its-store-b37442ef.md`). What curio found:
+- **No `/a/` here since curio 0.4.0** (2026-10-09). The boardwalk's default `SC_ASSET_BASE` is
+  `http://localhost:19463/a/`, which this curio answers with a 404, so the park in development has
+  had no art from curio since then. `@boardwalk` believed otherwise.
+- **The deployed `curio.siliconcircus.lol` is the old server, curio 0.2.2**, serving 102 assets. It
+  still answers `/a/boardwalk.deck.w640.webp` with a webp (checked 2026-10-19).
+  `deploy/env.sample` points there. Production boardwalk is on 0.2.3 and draws bundled art.
+- **The repoint isn't a URL swap.** `dd-serve` serves only full-size bytes by id, and the boardwalk
+  asks for old names with renditions in them. Each of the 76 props keeps its old name as a
+  `curio-name` tag, which finds it (`tag.curio-name=…`); renditions would still need making. Shapes
+  offered, none decided: the boardwalk resolves names and makes renditions, renditions stored as
+  assets, or `park-bundle/` baked at build time.
+- `@boardwalk` says **curio is leaving the `silicon-circus` org**, to be a general DD browser and
+  curator. curio has no record of that; ask Thomas.
+- The reply is held for Thomas: it touches who runs `dd-serve` (not decided) and the renditions
+  shape.
+
 ## Settled ways of keying (Thomas, 2026-10-08 and 2026-10-09)
 
 - **Types are named for the kind of asset, not the venue.** Every key starts with `venue`.
