@@ -1,6 +1,6 @@
 # Status
 
-*Updated 2026-10-17*
+*Updated 2026-10-19*
 
 curio is the web UI for DataDungeon (DD) stores. Thomas decided this on 2026-10-07: DD is the asset
 server and stays UI-free. The old server, which served the park's files by name, is tagged
@@ -21,6 +21,22 @@ by its `wordings` list.
 
 ## Open
 
+- **An "add a picture" button: Thomas wants it** (relayed by `@datadungeon`, 2026-10-19;
+  `mail/received/20261019-055743Z-@datadungeon--datadungeon-v0.15.1-an-upload-route-for-curio-s-bu-35bdbf0d.md`). It's for pictures added by hand, with no prompt. `@datadungeon` asks curio to
+  plan the button. **Open, not started.**
+  - **DD 0.15.1** (`f9c4bc6`) adds only `POST /assets`, so `~> 0.15.0` takes it. The park's
+    `dd-serve` needs rebuilding to serve it.
+  - The request is `multipart/form-data` with the write token. `file` holds the bytes, and its
+    `Content-Type` is the asset's. `asset` is JSON: `type`, `tags`, `custom`, `description`,
+    `permanent`, `made_at` and `supersedes`.
+  - The asset is stored as not generated, with no recipe, and a picture is measured. The answer is
+    `{asset, tags}`, as for `PATCH`.
+  - Bytes the type already holds get a 409 with `asset_id` and `retired`. The same bytes with the
+    same tags return that asset.
+  - `description` says what the picture shows. It isn't a prompt.
+  - In curio the token stays in the config, so the browser would post to a curio route that adds it,
+    as every other write does, and only in update mode.
+  - `supersedes` makes this the way to do the piggybank tweak (see park-store.md).
 - **DD 0.15.0 is tagged** (`58f1fa6`, 2026-10-17;
   `mail/received/20261017-224318Z-@datadungeon--datadungeon-v0.15.0-is-tagged-25613558.md`). It's a
   small cleanup, and its first read-write open converts a store one way, as before.
@@ -64,8 +80,8 @@ by its `wordings` list.
   would pass through it between apps' stores, marked `copied-from`. Points raised:
   - Things have to leave it, or it becomes a store no app owns. No app should use anything from it.
   - Types must match the destination's, or keys change on paste.
-  - curio can't add assets yet (no upload or copy). Still to check: whether dd-serve accepts new
-    assets over HTTP.
+  - curio can't add assets yet. dd-serve takes uploads from 0.15.1 (`POST /assets`, below), so the
+    add button would be the first piece.
   - Ask `@datadungeon` first whether copying between stores is planned. Hold that mail for Thomas.
 - **The hub is deferred** (Thomas, 2026-10-16, relayed by `@datadungeon`). See [hub.md](hub.md).
 - The park store's own open items are in [park-store.md](park-store.md).
