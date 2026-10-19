@@ -13,7 +13,10 @@ server and stays UI-free. The old server, which served the park's files by name,
   the boardwalk depended on, and still does.
 - **That handover is curio's whole job for now.** Thomas told `@siliconcircus` the same day that
   `assets/` stays curio's until curio says it's done, and that the boardwalk will then mount DD's
-  handler and serve its own art. What's done and what's left is in
+  handler and serve its own art.
+- **curio keeps the store until it's on DD's standard types** (Thomas, 2026-10-19), since curio was
+  in on that decision. He expects it with DD 0.15.4 and 0.15.5, within hours. Then it goes to the
+  boardwalk, and the remaining kinks are worked out with him. See
   [park-store.md](park-store.md#handing-the-store-to-the-boardwalk).
 - **Then curio's goal is the hub,** through which DD stores share assets, and which does their
   garbage collection. See [hub.md](hub.md).
@@ -26,6 +29,7 @@ server and stays UI-free. The old server, which served the park's files by name,
 | 0.5.0 | 2026-10-13 | `b7e8924` | runs on DD 0.12.x: the key from 0.12, falling back to `pool_key` |
 | 0.6.0 | 2026-10-14 | `accd565` | DD 0.13: the "How it was made" recipe panel, finding by a shared file, description or named wording, changing a shared description everywhere, Permanent |
 | 0.7.0 | 2026-10-17 | `ac96b8b` | DD 0.14: the recipe panel shows the prompt and instructions as sent, with each named wording marked; "any version" takes hash versions; a store with many types scrolls the type bar instead of widening the page |
+| 0.8.0 | 2026-10-19 | `f5ed8fb` | adding a file by hand (DD 0.15.1's `POST /assets`): a form in the detail panel, a dropped file, *New take…* |
 
 curio runs on DD 0.11.2 through 0.15. A 0.13 store is detected by `has_recipe` appearing on an
 asset, and an older store simply doesn't show the 0.13 parts. A 0.14 recipe is told from a 0.13 one
@@ -33,10 +37,12 @@ by its `wordings` list.
 
 ## Open
 
-- **Adding a file by hand: built in `4358d05`, not released yet** (2026-10-19). Thomas wanted
+- **Adding a file by hand: released in 0.8.0** (`4358d05`, released as `f5ed8fb`, tag `v0.8.0`, pushed
+  2026-10-19). Thomas's curio has run 0.8.0 since then; the form was checked on it, with nothing
+  added. Thomas wanted
   pictures added by hand, with no prompt, and a button in curio for it (relayed by `@datadungeon`;
   `mail/received/20261019-055743Z-@datadungeon--datadungeon-v0.15.1-an-upload-route-for-curio-s-bu-35bdbf0d.md`).
-  He OK'd the plan the same day; it would be curio 0.8.0.
+  He OK'd the plan the same day.
   - **What's built:** *+ Add a file* above the grid, or a file dropped anywhere on the page, opens a
     form in the detail panel. *New take…* on an asset adds a file in its place. curio's
     `POST …/assets` passes the form through with the write token, only in update mode, up to 256 MB.

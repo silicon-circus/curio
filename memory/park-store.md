@@ -96,17 +96,22 @@ whole job for now; then curio is free of it (see status.md).
 
 Thomas also decided, the same day (told to `@siliconcircus`, not to curio): **the boardwalk mounts
 DD's HTTP handler in its own server and serves its own art**, instead of pointing `SC_ASSET_BASE`
-anywhere, and `assets/` stays curio's until curio says it's done. The mount waits on that. The
-order is Thomas's to set.
+anywhere, and `assets/` stays curio's until curio says it's done. The mount waits on that.
+
+**The order (Thomas, 2026-10-19):** curio keeps the store until it has moved onto DD's standard
+types, since curio was in on that decision. He expects that with DD 0.15.4 and 0.15.5, within hours.
+Then it goes to the boardwalk, and the remaining kinks (the mount, the webp question, the rest of
+the art, where the store lives) are worked out with him. `@boardwalk`, `@siliconcircus` and
+`@datadungeon` were told, and asked `@datadungeon` to send the park's mapping note to `@curio`.
+curio subscribed to `#datadungeon` the same day.
 
 - **Done:** the rebuild on DD 0.15.3 (assets `b66492d`). The repo is clean, and curio has nothing
   in progress in it (2026-10-19).
-- **Open, waiting:** importing the rest of the boardwalk's art. It waits on the park's type mapping
-  from `@datadungeon`. Every store is moving onto DD's standard types (`#datadungeon` post 1,
+- **Next, curio's:** moving the store onto DD's standard types, from the park's mapping note.
+- **Open, after the handover:** importing the rest of the boardwalk's art. It waits on the types. Every store is moving onto DD's standard types (`#datadungeon` post 1,
   2026-10-19: Pirateship done, then Cattacula, the park and Owl), and each gets a note with its
   mapping. Mapping names by hand before then is work against a moving target.
-  - **Who imports is Thomas's to say:** curio when the note comes, or the boardwalk with the store.
-    Asked him 2026-10-19.
+  - Who imports isn't settled. Thomas listed it among the kinks to work out after the handover.
 - **curio's old files stay put** until the boardwalk's art is out of them: `curio/data/assets`
   (1052 files, named in `data/manifest.tsv`), and their backup.
 - **Handed over in the reply** (`mail/sent/20261019-231442Z-@boardwalk--re-boardwalk-and-its-store.md`):
