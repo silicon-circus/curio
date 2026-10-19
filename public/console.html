@@ -248,7 +248,8 @@ aside.detail { overflow-y: auto; background: var(--paper); border-left: 1px soli
 .detail h2 { font: 600 17px/1.25 var(--display); margin: 0; overflow-wrap: anywhere; }
 .detail .sub { font-size: 12.5px; color: var(--mute); margin-top: 3px; }
 .links { display: flex; gap: 14px; font-size: 12.5px; }
-.links a { color: var(--teal); }
+.links a, .links button.tiny { color: var(--teal); }
+.links button.tiny { padding: 0; text-decoration: underline; font-size: inherit; }
 table.tags { width: 100%; border-collapse: collapse; font: 12.5px var(--mono); }
 table.tags td { padding: 4px 6px; border-top: 1px solid var(--rule); vertical-align: middle; }
 table.tags td.k { color: var(--mute); width: 38%; overflow-wrap: anywhere; }
@@ -295,6 +296,19 @@ button.tiny { border: 0; background: none; color: var(--mute); padding: 0 4px; f
 button.tiny:hover { color: var(--ink); }
 .note { font-size: 12.5px; color: var(--mute); border-left: 3px solid var(--rule); padding-left: 8px; }
 .note.red { border-color: var(--red); color: var(--ink); }
+
+/* ── adding a file: the detail panel holds the form ───────────────────────────────── */
+.dropzone {
+  width: 100%; min-height: 200px; display: grid; place-content: center; gap: 4px; text-align: center;
+  border: 2px dashed var(--rule); border-radius: 8px; background: var(--paper); color: var(--mute); font-size: 12.5px;
+}
+.dropzone b { font: 600 15px var(--display); color: var(--ink); }
+.dropzone:hover { border-color: var(--teal); }
+body.dropping section.drawer, body.dropping .detail .preview { outline: 2px dashed var(--teal); outline-offset: -6px; }
+.adding select, .adding input[type=date] {
+  font: 12.5px var(--mono); padding: 3px 5px; border: 1px solid var(--rule); border-radius: 4px; background: var(--board);
+}
+.adding .field { display: grid; gap: 4px; }
 
 /* ── messages ──────────────────────────────────────────────────────────────────────── */
 #toasts { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); display: grid; gap: 8px; z-index: 10; }
@@ -352,7 +366,7 @@ const state = {
   stores: [], store: null, types: [], type: null, filters: {}, keys: {},
   assets: [], total: 0, page: 0, limit: 1, layout: null, selected: null, record: null,
   q: "", uses: null, unused: false, retired: null, view: null, viewCounts: {}, counted: null, find: null,
-  extra: null, key: null, idle: 600, deadline: 0, editing: null,
+  extra: null, key: null, idle: 600, deadline: 0, editing: null, adding: null,
 };
 
 // ── small helpers ──────────────────────────────────────────────────────────────────────────────
@@ -383,17 +397,19 @@ function toast(text, bad) {
 async function api(path, opts = {}) {
   const headers = { ...(opts.headers || {}) };
   if (state.key) headers["X-Curio-Update"] = state.key;
-  if (opts.body) headers["Content-Type"] = "application/json";
+  // A form (an upload) sets its own Content-Type, with the boundary between its parts.
+  const json = opts.body && !(opts.body instanceof FormData);
+  if (json) headers["Content-Type"] = "application/json";
   let res;
   try {
-    res = await fetch(path, { ...opts, headers, body: opts.body && JSON.stringify(opts.body) });
+    res = await fetch(path, { ...opts, headers, body: json ? JSON.stringify(opts.body) : opts.body });
   } catch (e) {
     throw new Error("curio is not answering. Is it still running?");
   }
   if (state.key && res.status !== 423) state.deadline = Date.now() + state.idle * 1000;
   const body = await res.json().catch(() => ({}));
   if (res.status === 423) goLocked();
-  if (!res.ok) throw new Error(body.error || `${res.status} ${res.statusText}`);
+  if (!res.ok) throw Object.assign(new Error(body.error || `${res.status} ${res.statusText}`), { status: res.status, body });
   return body;
 }
 
@@ -959,6 +975,7 @@ function renderDrawer() {
   fill($("status"),
     h("button", { className: "plain filtertoggle", onclick: () => document.body.classList.add("showfilters") }, "Filters"),
     h("span", { className: "count" }, `${state.total} ${state.type || (state.total === 1 ? "asset" : "assets")}`),
+    h("span", { id: "addslot" }, addButton()),
     pages() > 1 ? h("span", { className: "mute" }, `showing ${first}–${last}`) : null,
     ...chips,
     chips.length > 1 ? h("button", { className: "tiny", onclick: clearFilters }, "clear all") : null,
@@ -1035,10 +1052,15 @@ player.addEventListener("ended", () => { if (playing) { playing.setAttribute("ar
 
 // ── one asset ──────────────────────────────────────────────────────────────────────────────────
 
+function openPanel() {
+  if ($("detail").hidden) { $("main").classList.add("detailed"); $("detail").hidden = false; relayout(); }
+}
+
 async function select(id) {
+  dropAdding();
   state.selected = id;
   markCurrent(id);
-  if ($("detail").hidden) { $("main").classList.add("detailed"); $("detail").hidden = false; relayout(); }
+  openPanel();
   saveHash();
   try { state.record = await api(`${S()}/assets/${id}`); }
   catch (e) { fill($("detail"), h("p", { className: "body" }, e.message)); return; }
@@ -1063,6 +1085,7 @@ async function loadExtras(a) {
 
 // `quiet` when the caller is about to load a page anyway, so the grid is not fetched twice.
 function closeDetail(quiet) {
+  dropAdding();
   state.selected = null; state.record = null; state.editing = null; state.extra = null;
   const was = !$("detail").hidden;
   if (was) { $("main").classList.remove("detailed"); $("detail").hidden = true; }
@@ -1179,6 +1202,8 @@ function renderDetail() {
             h("button", { className: "plain", onclick: () => { state.editing = null; renderDetail(); } }, "Cancel")]
          : h("button", { className: "plain", onclick: edit }, "Edit tags and description"),
       h("span", { style: "flex:1" }),
+      a.retired_at ? null : h("button", { className: "plain", title: "Add a file in its place: this one is retired, and its links carry over",
+        onclick: () => startAdding({ from: state.record }) }, "New take…"),
       a.retired_at ? null : h("button", { className: "plain", title: "Hide it from listings and search, and keep it; reinstate undoes it",
         onclick: () => setRetirement(a, true) }, "Retire"),
       h("button", { className: "plain danger", onclick: remove }, "Delete asset")) : null,
@@ -1526,6 +1551,215 @@ async function remove() {
   } catch (e) { toast(e.message, true); }
 }
 
+// ── adding a file by hand ──────────────────────────────────────────────────────────────────────
+
+/* A FILE ADDED BY HAND (DataDungeon 0.15.1, Thomas, 2026-10-19): a picture with no prompt, so no
+ * recipe. It goes into a registered type, with that type's tags and words for what it shows. A
+ * new take of an asset goes in its place: the old one is retired, and its links carry over. The
+ * form takes the detail panel, so the grid it is joining stays in view. */
+
+function addableTypes() { return state.types.filter((t) => t.registration); }
+
+function addButton() {
+  return updating() ? h("button", { className: "plain", title: "Add a file by hand, with its tags and description",
+    onclick: () => startAdding() }, "+ Add a file") : null;
+}
+
+function startAdding({ file, from } = {}) {
+  if (!updating()) return toast("Turn on update mode to add a file.", true);
+  const types = addableTypes();
+  if (!types.length) return toast(`${state.store} has no registered type to add a file to.`, true);
+  const a = from && from.asset;
+  const type = a ? a.asset_type : (types.find((t) => t.name === state.type) || types[0]).name;
+  const rows = a ? sortedTags(from.tags).map(([k, v]) => ({ k, v, trait: traitsOf(type).includes(k) })) : startingRows(type);
+  closeDetail(true);
+  state.adding = { type, rows, description: a ? a.description || "" : "", permanent: !!(a && a.permanent),
+                   made: "", supersedes: a ? a.id : null, file: null, url: null, held: null, busy: false };
+  if (file) choose(file);
+  openPanel();
+  renderAdding();
+}
+
+function dropAdding() {
+  if (state.adding && state.adding.url) URL.revokeObjectURL(state.adding.url);
+  state.adding = null;
+}
+
+function traitsOf(type) {
+  const t = state.types.find((t) => t.name === type);
+  return (t && t.registration && t.registration.pool_traits) || [];
+}
+
+// The type's key traits, each filled in from the filters when adding to the type in view: what is
+// on screen is what the file is joining.
+function startingRows(type) {
+  const traits = traitsOf(type), given = type === state.type ? state.filters : {};
+  return [...traits.map((k) => ({ k, v: given[k] || "", trait: true })),
+          ...Object.entries(given).filter(([k]) => !traits.includes(k)).map(([k, v]) => ({ k, v, trait: false }))];
+}
+
+function changeType(type) {
+  const ad = state.adding, had = Object.fromEntries(ad.rows.map((r) => [r.k, r.v]));
+  ad.type = type;
+  ad.rows = startingRows(type).map((r) => ({ ...r, v: had[r.k] || r.v }));
+  renderAdding();
+}
+
+function choose(file) {
+  const ad = state.adding;
+  if (ad.url) URL.revokeObjectURL(ad.url);
+  ad.file = file; ad.url = URL.createObjectURL(file); ad.held = null;
+}
+
+// A trait's values in this type, for the browser to suggest as it is typed. Asked once per store,
+// type and trait.
+const knownValues = {};
+function valuesOf(type, key) {
+  const at = `${state.store}/${type}/${key}`;
+  if (!(at in knownValues)) knownValues[at] = api(`${S()}/types/${enc(type)}/tags/${enc(key)}?limit=100`).then(Object.keys).catch(() => []);
+  return knownValues[at];
+}
+
+function sizeOf(n) { return n < 1 << 20 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / (1 << 20)).toFixed(1)} MB`; }
+function dayOf(ms) { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
+
+function renderAdding() {
+  const ad = state.adding;
+  if (!ad) return;
+  const can = updating();
+  const picker = h("input", { type: "file", hidden: true,
+    onchange: (e) => { if (e.target.files[0]) { choose(e.target.files[0]); renderAdding(); } } });
+  const pick = () => picker.click();
+  const f = ad.file;
+  const shown = !f ? h("button", { className: "dropzone", onclick: pick }, h("b", null, "Choose a file"), h("span", null, "or drop one here"))
+    : /^image\//.test(f.type) ? h("img", { src: ad.url, alt: f.name })
+    : /^audio\//.test(f.type) ? h("audio", { controls: true, src: ad.url })
+    : /^video\//.test(f.type) ? h("video", { controls: true, src: ad.url })
+    : h("span", { className: "glyph", style: "font: 600 48px var(--display); color: var(--mute)" }, "◇");
+
+  const rows = ad.rows.map((r, i) => {
+    const list = r.trait ? h("datalist", { id: `known-${i}` }) : null;
+    if (list) valuesOf(ad.type, r.k).then((vs) => fill(list, ...vs.map((v) => h("option", { value: v }))));
+    return h("tr", null,
+      h("td", { className: "k" }, r.trait ? r.k : h("input", { value: r.k, "aria-label": "Tag name", oninput: (e) => { r.k = e.target.value; } })),
+      h("td", { className: "v" }, h("input", { value: r.v, list: list && list.id, "aria-label": `Value of ${r.k || "the tag"}`,
+        oninput: (e) => { r.v = e.target.value; } }), list),
+      h("td", { className: "x" }, r.trait ? null
+        : h("button", { className: "tiny", "aria-label": `Remove ${r.k}`, onclick: () => { ad.rows.splice(i, 1); renderAdding(); } }, "×")));
+  });
+  const fileDay = f && f.lastModified ? dayOf(f.lastModified) : null;
+  const made = h("input", { type: "date", value: ad.made, "aria-label": "Made on", oninput: (e) => { ad.made = e.target.value; } });
+
+  const body = h("div", { className: "body adding" },
+    h("div", null,
+      h("h2", null, ad.supersedes ? `A new take of #${ad.supersedes}` : "Add a file"),
+      h("div", { className: "sub" }, f ? `${f.name} · ${sizeOf(f.size)} · ${f.type || "an unknown kind of file"}` : `to ${state.store}`)),
+    f ? h("div", { className: "links" }, h("button", { className: "tiny", onclick: pick }, "Choose another file")) : null,
+    ad.supersedes ? h("p", { className: "note" }, `It goes in place of #${ad.supersedes}, which is retired. Its links carry over to the new take.`) : null,
+    !can ? h("p", { className: "note" }, "Turn on update mode to add it.") : null,
+
+    h("label", { className: "field" }, h("span", { className: "eyebrow", style: "margin:0" }, "Type"),
+      h("select", { disabled: !!ad.supersedes, onchange: (e) => changeType(e.target.value),
+        title: ad.supersedes ? "A new take is the same type as the one it replaces" : null },
+        ...addableTypes().map((t) => h("option", { value: t.name, selected: t.name === ad.type }, t.name)))),
+
+    h("div", null,
+      h("p", { className: "eyebrow" }, "Tags"),
+      h("table", { className: "tags" }, h("tbody", null, ...rows,
+        h("tr", null, h("td", { colSpan: 3 }, h("button", { className: "tiny", onclick: () => { ad.rows.push({ k: "", v: "", trait: false }); renderAdding(); } }, "+ add a tag")))))),
+
+    h("div", null,
+      h("p", { className: "eyebrow" }, "Description"),
+      h("textarea", { value: ad.description, "aria-label": "Description", placeholder: "What it shows, in words. Not a prompt.",
+        oninput: (e) => { ad.description = e.target.value; } })),
+
+    h("div", { className: "row" },
+      h("span", { className: "eyebrow", style: "margin:0" }, "Made"), made,
+      fileDay ? h("button", { className: "tiny", title: "The date the file was last changed", onclick: () => { ad.made = made.value = fileDay; } },
+        `the file's date, ${fileDay}`) : null),
+    h("div", { className: "row" },
+      h("span", { className: "eyebrow", style: "margin:0" }, "Permanent"),
+      h("button", { className: "plain", "aria-pressed": String(ad.permanent), title: "A permanent asset is never evicted for lack of use",
+        onclick: () => { ad.permanent = !ad.permanent; renderAdding(); } }, ad.permanent ? "Yes, never evicted" : "No")),
+
+    ad.held ? h("p", { className: "note" }, `${ad.type} already holds this file, as #${ad.held.id}${ad.held.retired ? ", retired" : ""}. `,
+      h("button", { className: "plain", onclick: () => select(ad.held.id) }, `Open #${ad.held.id}`)) : null,
+    h("div", { className: "row" },
+      h("button", { className: "plain go", disabled: !can || !f || ad.busy, onclick: addIt }, ad.busy ? "Adding…" : `Add to ${state.store}`),
+      h("button", { className: "plain", onclick: () => closeDetail() }, "Cancel")));
+
+  fill($("detail"),
+    h("div", { className: "preview" }, shown, picker,
+      h("button", { className: "close", "aria-label": "Close", onclick: () => closeDetail() }, "×")),
+    body);
+}
+
+async function addIt() {
+  const ad = state.adding;
+  if (!ad || !ad.file || ad.busy) return;
+  if (!ad.file.type) return toast("The browser can't tell what kind of file this is, so the store couldn't either.", true);
+  const rows = ad.rows.map((r) => [r.k.trim(), r.v.trim()]).filter(([k, v]) => k && v);
+  const tags = Object.fromEntries(rows);
+  if (rows.length !== Object.keys(tags).length) return toast("Two tags have the same name. Rename or remove one.", true);
+  const asset = { type: ad.type, tags };
+  if (ad.description.trim()) asset.description = ad.description.trim();
+  if (ad.permanent) asset.permanent = true;
+  if (ad.made) asset.made_at = ad.made;
+  if (ad.supersedes) asset.supersedes = ad.supersedes;
+  const form = new FormData();
+  form.append("file", ad.file);
+  form.append("asset", JSON.stringify(asset));
+  ad.busy = true; ad.held = null;
+  renderAdding();
+  const asked = Date.now();
+  try {
+    const out = await api(`${S()}/assets`, { method: "POST", body: form });
+    const id = out.asset.id;
+    // The same file with the same tags, already current, comes back as the asset that holds it: one
+    // on this page, or one stored before this was asked (with a minute's grace for the clocks).
+    const before = state.assets.some((x) => x.id === id)
+      || Date.parse(String(out.asset.created_at).replace(" ", "T") + "Z") < asked - 60000;
+    toast(before ? `Already there: #${id} holds this file, with these tags.`
+      : ad.supersedes ? `Added #${id} in place of #${ad.supersedes}, which is retired.` : `Added #${id} to ${state.store}.`);
+    state.types = await api(`${S()}/types`).catch(() => state.types);
+    renderTypes();
+    state.keys = {};
+    loadKeys();
+    state.counted = null;
+    await loadAssets(state.page);
+    select(id);
+  } catch (e) {
+    if (state.adding !== ad) return toast(e.message, true);
+    ad.busy = false;
+    if (e.status === 409 && e.body && e.body.asset_id) ad.held = { id: e.body.asset_id, retired: e.body.retired };
+    else toast(e.message, true);
+    renderAdding();
+  }
+}
+
+// A file dragged over the page is never opened by the browser in curio's place. In update mode,
+// one dropped anywhere goes into the add form.
+let dragging;
+document.addEventListener("dragover", (e) => {
+  if (!e.dataTransfer.types.includes("Files")) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = updating() ? "copy" : "none";
+  if (!updating()) return;
+  document.body.classList.add("dropping");
+  clearTimeout(dragging);
+  dragging = setTimeout(() => document.body.classList.remove("dropping"), 200);
+});
+document.addEventListener("drop", (e) => {
+  if (!e.dataTransfer.types.includes("Files")) return;
+  e.preventDefault();
+  document.body.classList.remove("dropping");
+  if (!updating()) return toast(writable() ? "Turn on update mode to add a file." : `${state.store} is read-only here.`, true);
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  if (e.dataTransfer.files.length > 1) toast("One file at a time: the first one is ready to add.");
+  if (state.adding) { choose(file); renderAdding(); } else startAdding({ file });
+});
+
 // ── update mode ────────────────────────────────────────────────────────────────────────────────
 // The key lives in this variable and nowhere else, so reloading the page is turning the switch off.
 
@@ -1556,6 +1790,8 @@ function goLocked(why) {
 function afterSwitch() {
   renderSwitch();
   if (state.record) renderDetail();
+  if (state.adding) renderAdding();
+  if ($("addslot")) fill($("addslot"), addButton());
   if (state.type) {
     const old = document.querySelector(".health");
     if (old) old.replaceWith(health());
@@ -1586,7 +1822,7 @@ setInterval(tick, 1000);
 document.addEventListener("keydown", (e) => {
   if (e.target.closest("input, textarea, select")) return;
   if (e.key === "/") { e.preventDefault(); $("q").focus(); $("q").select(); return; }
-  if (e.key === "Escape" && state.selected) { closeDetail(); return; }
+  if (e.key === "Escape" && (state.selected || state.adding)) { closeDetail(); return; }
   if ((e.key === "PageDown" || e.key === "PageUp") && state.layout) {
     e.preventDefault();
     goPage(state.page + (e.key === "PageDown" ? 1 : -1));

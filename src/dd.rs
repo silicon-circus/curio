@@ -24,6 +24,13 @@ pub enum Access {
     Write,
 }
 
+/// What a write sends: JSON, as almost every write does, or a form, as an upload does. A form's
+/// Content-Type carries the boundary its parts are split on, so it goes to the store as it came.
+pub enum Payload {
+    Json(Bytes),
+    Form(Bytes, HeaderValue),
+}
+
 pub struct Dd {
     http: reqwest::Client,
 }
@@ -66,7 +73,7 @@ impl Dd {
         method: Method,
         segments: &[&str],
         query: Option<&str>,
-        body: Option<Bytes>,
+        body: Option<Payload>,
     ) -> Result<reqwest::Response, Response> {
         let url = Dd::url(store, segments, query);
         let mut req = self.http.request(method, url);
@@ -77,8 +84,10 @@ impl Dd {
         if let Some(t) = token {
             req = req.bearer_auth(t);
         }
-        if let Some(b) = body {
-            req = req.header(header::CONTENT_TYPE, "application/json").body(b);
+        match body {
+            Some(Payload::Json(b)) => req = req.header(header::CONTENT_TYPE, "application/json").body(b),
+            Some(Payload::Form(b, kind)) => req = req.header(header::CONTENT_TYPE, kind).body(b),
+            None => {}
         }
         req.send().await.map_err(|e| {
             let why = if e.is_connect() { "did not answer" } else if e.is_timeout() { "timed out" } else { "failed" };
@@ -95,7 +104,7 @@ impl Dd {
         method: Method,
         segments: &[&str],
         query: Option<&str>,
-        body: Option<Bytes>,
+        body: Option<Payload>,
     ) -> Response {
         match self.send(store, access, method, segments, query, body).await {
             Ok(res) => relay(res, store),

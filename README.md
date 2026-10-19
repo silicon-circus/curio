@@ -19,7 +19,7 @@ tagged `v0.3.2-server`.*
 | | |
 |---|---|
 | **Rust** stable (1.90+) | `cargo build --release`; the only build step |
-| a DataDungeon store, **0.11.2 or later** | reachable over its API: `dd-serve` beside a database, or an app that mounts `DataDungeon::API`. curio uses its search, links, paging, retiring and picture fields; from **0.13**, recipes, shared descriptions and `permanent`, which an older store simply doesn't show; from **0.14**, recipes as sent, with their wordings |
+| a DataDungeon store, **0.11.2 or later** | reachable over its API: `dd-serve` beside a database, or an app that mounts `DataDungeon::API`. curio uses its search, links, paging, retiring and picture fields; from **0.13**, recipes, shared descriptions and `permanent`, which an older store simply doesn't show; from **0.14**, recipes as sent, with their wordings; from **0.15.1**, adding a file by hand |
 | `just` *(optional)* | remembers the commands; nothing requires it |
 
 ## Configuring stores
@@ -57,9 +57,20 @@ DataDungeon). Without `DD_WRITE_TOKEN` it opens the database read-only:
 
 ## Update mode
 
-curio starts read-only. The red switch in the corner turns update mode on, and then you can edit tags,
-description, rating, flag and whether it's permanent (never evicted for lack of use), retire or delete
-an asset, make a custom tag value standard, and clean up a store.
+curio starts read-only. The red switch in the corner turns update mode on, and then you can add a
+file, edit tags, description, rating, flag and whether it's permanent (never evicted for lack of use),
+retire or delete an asset, make a custom tag value standard, and clean up a store.
+
+**Adding a file by hand** (DataDungeon 0.15.1): *+ Add a file* beside the count above the grid, or
+drop a file anywhere on the page. The form takes the detail panel, so the grid stays in view. The
+file goes into a registered type, the one in view unless you choose another. Its key traits are
+listed, filled in from the filters in view, with the values the type already has suggested as you
+type. The description says what the file shows, in words: a file added by hand has no prompt, so
+it has no recipe. *Made* is optional, and the file's own date is offered. A file the type already
+holds is refused, with a button to open the asset that holds it; the same file with the same tags
+simply finds it. *New take…* on an asset adds a file in its place, starting from its type, tags and
+description: the old one is retired, and its links carry over. curio passes on files of up to
+256 MB.
 
 **A description can be shared.** A room's description is one text, used by every picture of the room.
 Editing it changes this asset's words alone, unless you tick *Change it on all N assets that share
@@ -199,6 +210,7 @@ Everything under `/api/stores/<name>/` is that store's DataDungeon API, passed t
 | `PATCH` `DELETE` | `…/assets/:id` | edit (`{tags, description, everywhere, rating, flagged, permanent, image}`) or delete — update mode |
 | `POST` `DELETE` | `…/assets/:id/links` | link (`{rel, name}` or `{rel, to}`, with optional `data`) or unlink (`?rel=&name=`) — update mode |
 | `POST` | `…/assets/:id/retire`, `…/assets/:id/reinstate` | hide and keep, or bring back — update mode |
+| `POST` | `…/assets` | a file added by hand: `multipart/form-data` with a `file` part and an `asset` part (`{type, tags, custom, description, permanent, made_at, supersedes}`), passed through as it came; 409 with `asset_id` when the type already holds the file — update mode |
 | `POST` | `…/prune` | `{type, keep_last, retired_before}`: delete retired assets for good — update mode |
 | `POST` | `…/measure` | `{type, all}`: have the store measure its pictures — update mode |
 | `POST` | `…/types/:type/promote`, `…/vacuum` | update mode |

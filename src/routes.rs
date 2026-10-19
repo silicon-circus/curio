@@ -14,7 +14,7 @@
 // A refusal here IS the answer sent to the browser, so it is a Response, large or not.
 #![allow(clippy::result_large_err)]
 
-use crate::dd::{self, Access};
+use crate::dd::{self, Access, Payload};
 use crate::thumbs::{self, Thumb};
 use crate::update;
 use crate::AppState;
@@ -90,14 +90,15 @@ fn update_key(h: &HeaderMap) -> Option<&str> {
 
 const CONSOLE: &str = include_str!("../public/console.html");
 
-/// The console is compiled in, so the binary needs nothing beside it.
+/// The console is compiled in, so the binary needs nothing beside it. `blob:` lets it show a file
+/// chosen for adding before it is sent: a URL the page made itself, for bytes already in the browser.
 pub async fn console() -> Response {
     let mut res = ([(header::CONTENT_TYPE, "text/html; charset=utf-8")], CONSOLE).into_response();
     let h = res.headers_mut();
     h.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
     h.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static(
         "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; \
-         img-src 'self' data:; media-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"));
+         img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"));
     h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
     res
 }
@@ -352,9 +353,44 @@ async fn write(
     body: Option<Bytes>,
 ) -> Response {
     match may_write(state, name, headers) {
-        Ok(s) => no_store(state.dd.relay(s, Access::Write, method, segments, query, body).await),
+        Ok(s) => no_store(state.dd.relay(s, Access::Write, method, segments, query, body.map(Payload::Json)).await),
         Err(e) => e,
     }
+}
+
+/// The largest file curio passes on in one upload. The whole form is held in memory on its way
+/// through, and DataDungeon holds it again, so this is a ceiling, not a target.
+pub const MAX_UPLOAD: usize = 256 << 20;
+
+/// A FILE ADDED BY HAND (DataDungeon 0.15.1): `multipart/form-data` with a `file` part, the bytes
+/// under their own Content-Type, and an `asset` part, JSON with the type, tags and description. It
+/// goes to the store as it came, boundary and all, with the write token added as for any write.
+///
+/// The switch is checked before the body is read, so a refused upload never buffers its file. A
+/// file the type already holds comes back as the store's 409, naming the asset that holds it.
+pub async fn add_asset(State(state): St, Path(name): Path<String>, req: Request) -> Response {
+    let s = match may_write(&state, &name, req.headers()) {
+        Ok(s) => s,
+        Err(e) => return e,
+    };
+    let kind = match req.headers().get(header::CONTENT_TYPE) {
+        Some(v) if v.to_str().is_ok_and(|t| t.to_ascii_lowercase().starts_with("multipart/form-data")) => v.clone(),
+        _ => return dd::error(StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            "an upload is multipart/form-data: a file part, and an asset part with its type and tags".into()),
+    };
+    let too_big = || dd::error(StatusCode::PAYLOAD_TOO_LARGE,
+        format!("curio passes on files of up to {} MB", MAX_UPLOAD >> 20));
+    let declared = req.headers().get(header::CONTENT_LENGTH)
+        .and_then(|v| v.to_str().ok()).and_then(|v| v.parse::<usize>().ok());
+    if declared.is_some_and(|n| n > MAX_UPLOAD) {
+        return too_big();
+    }
+    let body = match axum::body::to_bytes(req.into_body(), MAX_UPLOAD).await {
+        Ok(b) => b,
+        Err(_) if declared.is_none() => return too_big(),
+        Err(e) => return dd::error(StatusCode::BAD_REQUEST, format!("the upload didn't arrive whole: {e}")),
+    };
+    no_store(state.dd.relay(s, Access::Write, Method::POST, &["assets"], None, Some(Payload::Form(body, kind))).await)
 }
 
 pub async fn update_asset(

@@ -13,6 +13,9 @@ use std::sync::Mutex;
 /// What the fake store saw: method, path and query, and the token, if any.
 type Seen = Arc<Mutex<Vec<(Method, String, Option<String>)>>>;
 
+/// Each upload the fake store was sent: its Content-Type and its body, as they arrived.
+type Uploads = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
+
 fn png() -> Vec<u8> {
     let img = image::RgbImage::from_fn(640, 320, |x, y| image::Rgb([x as u8, y as u8, 90]));
     let mut out = std::io::Cursor::new(Vec::new());
@@ -25,9 +28,10 @@ fn sha(bytes: &[u8]) -> String {
     sha2::Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
 }
 
-async fn fake_dd(seen: Seen) -> String {
+async fn fake_dd(seen: Seen, uploads: Uploads) -> String {
     let handler = move |req: Request| {
         let seen = seen.clone();
+        let uploads = uploads.clone();
         async move {
             let auth = req.headers().get(header::AUTHORIZATION)
                 .and_then(|v| v.to_str().ok()).map(|v| v.trim_start_matches("Bearer ").to_string());
@@ -38,6 +42,18 @@ async fn fake_dd(seen: Seen) -> String {
                 return (StatusCode::UNAUTHORIZED, r#"{"error":"Reads need a token"}"#).into_response();
             }
             let json = |s: &'static str| ([(header::CONTENT_TYPE, "application/json")], s).into_response();
+            if (req.method(), path.as_str()) == (&Method::POST, "/assets") {
+                let kind = req.headers().get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+                let body = axum::body::to_bytes(req.into_body(), usize::MAX).await.unwrap().to_vec();
+                let held = body.windows(10).any(|w| w == b"held-bytes");
+                uploads.lock().unwrap().push((kind, body));
+                return if held {
+                    (StatusCode::CONFLICT, [(header::CONTENT_TYPE, "application/json")],
+                        r#"{"error":"art already holds these bytes","asset_id":584,"retired":true}"#).into_response()
+                } else {
+                    json(r#"{"asset":{"id":9,"asset_type":"art"},"tags":{"venue":"pier"}}"#)
+                };
+            }
             match (req.method().as_str(), path.as_str()) {
                 ("GET", "/types") => json(r#"[{"name":"art","count":2,"registration":null}]"#),
                 ("GET", "/types/a%2Fb/tags") => json(r#"{"venue":2}"#),
@@ -70,6 +86,7 @@ async fn fake_dd(seen: Seen) -> String {
 struct Rig {
     base: String,
     seen: Seen,
+    uploads: Uploads,
     http: reqwest::Client,
     thumbs: PathBuf,
 }
@@ -77,7 +94,8 @@ struct Rig {
 impl Rig {
     async fn new(name: &str) -> Rig {
         let seen: Seen = Arc::default();
-        let dd = fake_dd(seen.clone()).await;
+        let uploads: Uploads = Arc::default();
+        let dd = fake_dd(seen.clone(), uploads.clone()).await;
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
         let mut cfg = Config::parse(&format!(r#"
@@ -100,7 +118,7 @@ impl Rig {
         cfg.thumbs = thumbs.clone();
         let st = state(cfg).unwrap();
         tokio::spawn(async move { axum::serve(listener, app(st)).await.unwrap() });
-        Rig { base: format!("http://127.0.0.1:{port}"), seen, http: reqwest::Client::new(), thumbs }
+        Rig { base: format!("http://127.0.0.1:{port}"), seen, uploads, http: reqwest::Client::new(), thumbs }
     }
 
     fn url(&self, path: &str) -> String {
@@ -344,4 +362,66 @@ async fn the_store_list_never_includes_a_token() {
     let v: serde_json::Value = serde_json::from_str(&text).unwrap();
     let writable: Vec<bool> = v["stores"].as_array().unwrap().iter().map(|s| s["writable"].as_bool().unwrap()).collect();
     assert_eq!(writable, [false, true, false]);
+}
+
+/// A form as a browser sends one: the file, under its own Content-Type, then the asset's JSON.
+fn upload_form(boundary: &str, file: &[u8], asset: &str) -> Vec<u8> {
+    let mut out = format!("--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.png\"\r\n\
+        Content-Type: image/png\r\n\r\n").into_bytes();
+    out.extend_from_slice(file);
+    out.extend_from_slice(format!("\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"asset\"\r\n\r\n\
+        {asset}\r\n--{boundary}--\r\n").as_bytes());
+    out
+}
+
+#[tokio::test]
+async fn an_upload_reaches_the_store_as_it_came_and_only_through_the_switch() {
+    let r = Rig::new("upload").await;
+    let kind = "multipart/form-data; boundary=curio-test-7f3a";
+    let form = upload_form("curio-test-7f3a", &png(), r#"{"type":"art","tags":{"venue":"pier"}}"#);
+    let post = |store: &str, key: Option<&str>, kind: &str, body: Vec<u8>| {
+        let mut req = r.http.post(r.url(&format!("/api/stores/{store}/assets"))).header("content-type", kind).body(body);
+        if let Some(k) = key {
+            req = req.header("x-curio-update", k);
+        }
+        req.send()
+    };
+
+    assert_eq!(post("curated", None, kind, form.clone()).await.unwrap().status(), StatusCode::LOCKED, "switch off");
+    let key = r.unlock().await;
+    assert_eq!(post("open", Some(&key), kind, form.clone()).await.unwrap().status(), StatusCode::FORBIDDEN,
+        "a store without a write token takes no uploads");
+    assert_eq!(post("curated", Some(&key), "application/json", b"{}".to_vec()).await.unwrap().status(),
+        StatusCode::UNSUPPORTED_MEDIA_TYPE, "only a form is an upload");
+    assert!(r.tokens_seen().is_empty(), "none of those reached the store");
+
+    let res = post("curated", Some(&key), kind, form.clone()).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(res.headers()[header::CACHE_CONTROL], "no-store");
+    let v: serde_json::Value = res.json().await.unwrap();
+    assert_eq!(v["asset"]["id"], 9);
+    assert_eq!(r.tokens_seen(), vec![(Method::POST, "/assets".to_string(), Some("WRITE".to_string()))]);
+    let sent = std::mem::take(&mut *r.uploads.lock().unwrap());
+    assert_eq!(sent, vec![(kind.to_string(), form)], "the boundary and every byte arrive as sent");
+
+    let held = upload_form("curio-test-7f3a", b"held-bytes", r#"{"type":"art","tags":{}}"#);
+    let res = post("curated", Some(&key), kind, held).await.unwrap();
+    assert_eq!(res.status(), StatusCode::CONFLICT, "a file the type already holds");
+    let v: serde_json::Value = res.json().await.unwrap();
+    assert_eq!((v["asset_id"].as_i64(), v["retired"].as_bool()), (Some(584), Some(true)), "says which asset holds it");
+}
+
+#[tokio::test]
+async fn an_upload_too_big_to_pass_on_is_refused_before_it_is_read() {
+    let r = Rig::new("toobig").await;
+    let key = r.unlock().await;
+    let res = r.http.post(r.url("/api/stores/curated/assets"))
+        .header("x-curio-update", &key)
+        .header("content-type", "multipart/form-data; boundary=b")
+        .header("content-length", (routes::MAX_UPLOAD + 1).to_string())
+        .body(vec![0u8; 16])
+        .send().await;
+    // The declared length is refused at once; curio answers without waiting for a body that never comes.
+    assert_eq!(res.expect("an answer, not a dropped connection").status(), StatusCode::PAYLOAD_TOO_LARGE);
+    assert!(r.tokens_seen().is_empty());
 }
