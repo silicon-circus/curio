@@ -84,8 +84,40 @@ similar). Until that replica exists, the store has no off-machine copy.
     and I over-read it as a decision.
   - On 2026-10-14 he chose a store per app. His reasons: a corrupted or lost store takes down only its
     own app, and a one-way upgrade no longer forces every app to move at once.
-- **Still open:** whether the store stays at `siliconcircus.lol/assets` or moves in with boardwalk,
-  and whether its README and name should stop calling it the park's.
+- **Where the store lives, and its README** (which still calls it the park's), are the boardwalk's
+  to settle with Thomas.
+
+## Handing the store to the boardwalk
+
+**Thomas, 2026-10-19:** the boardwalk gets its own DataDungeon, as Cattacula and Pirateship have
+theirs. curio has looked after this store only because curio grew out of the archive (later
+"assets") server the boardwalk depended on, and still does. Getting the boardwalk onto it is curio's
+whole job for now; then curio is free of it (see status.md).
+
+Thomas also decided, the same day (told to `@siliconcircus`, not to curio): **the boardwalk mounts
+DD's HTTP handler in its own server and serves its own art**, instead of pointing `SC_ASSET_BASE`
+anywhere, and `assets/` stays curio's until curio says it's done. The mount waits on that. The
+order is Thomas's to set.
+
+- **Done:** the rebuild on DD 0.15.3 (assets `b66492d`). The repo is clean, and curio has nothing
+  in progress in it (2026-10-19).
+- **Open, waiting:** importing the rest of the boardwalk's art. It waits on the park's type mapping
+  from `@datadungeon`. Every store is moving onto DD's standard types (`#datadungeon` post 1,
+  2026-10-19: Pirateship done, then Cattacula, the park and Owl), and each gets a note with its
+  mapping. Mapping names by hand before then is work against a moving target.
+  - **Who imports is Thomas's to say:** curio when the note comes, or the boardwalk with the store.
+    Asked him 2026-10-19.
+- **curio's old files stay put** until the boardwalk's art is out of them: `curio/data/assets`
+  (1052 files, named in `data/manifest.tsv`), and their backup.
+- **Handed over in the reply** (`mail/sent/20261019-231442Z-@boardwalk--re-boardwalk-and-its-store.md`):
+  - this note, for how each move was done and checked, and the small open items;
+  - dd-serve: once the handler is mounted, the park doesn't need it. curio's console still reads
+    the store through it, with the write token.
+- **Thomas's to decide:** clearing the old backups and binaries (curio's leftovers), and retiring the
+  deployed old server once nothing points at it.
+- `@siliconcircus` was told the same (`mail/sent/20261019-231449Z-@siliconcircus--curio-and-the-boardwalk-s-store-where-things-stand.md`). Its notes had
+  Cattacula's voices as "in the wrong store", waiting on who removes them; curio passed on Thomas's
+  2026-10-17 word that they stay.
 
 ## How the park gets its art (2026-10-19)
 
@@ -97,15 +129,21 @@ similar). Until that replica exists, the store has no off-machine copy.
 - **The deployed `curio.siliconcircus.lol` is the old server, curio 0.2.2**, serving 102 assets. It
   still answers `/a/boardwalk.deck.w640.webp` with a webp (checked 2026-10-19).
   `deploy/env.sample` points there. Production boardwalk is on 0.2.3 and draws bundled art.
-- **The repoint isn't a URL swap.** `dd-serve` serves only full-size bytes by id, and the boardwalk
-  asks for old names with renditions in them. Each of the 76 props keeps its old name as a
-  `curio-name` tag, which finds it (`tag.curio-name=…`); renditions would still need making. Shapes
-  offered, none decided: the boardwalk resolves names and makes renditions, renditions stored as
-  assets, or `park-bundle/` baked at build time.
-- `@boardwalk` says **curio is leaving the `silicon-circus` org**, to be a general DD browser and
-  curator. curio has no record of that; ask Thomas.
-- The reply is held for Thomas: it touches who runs `dd-serve` (not decided) and the renditions
-  shape.
+- **The format is the gap, not the width.** The park never asks `?w=`, and its two `w640` names are
+  files stored under those names. But of the 48 names in the boardwalk's `src/assets.json`, only 12
+  are stored under the name asked for. The other 36 are `.png` masters that the old server answered
+  as `.webp`, converting on the fly (`src/serve.rs`, `src/derive.rs` at `v0.3.2-server`).
+  - DD's handler serves stored bytes and doesn't convert. Its shard has a png-to-webp encoder
+    (`webp.cr`), but nothing calls it on request.
+  - The props in the store are the masters too: #621's `curio-name` is
+    `boardwalk.topiary.barrel.night.real.png`, and the park asks for the `.webp`.
+  - Ways offered, none decided: store the webp the park draws, made at import; draw the png; or
+    convert in the boardwalk, cached by file hash.
+- **Where the 48 are:** 15 have their master in the store, 33 only in curio's old files, and none
+  is missing from both (by name without width or format, 2026-10-19). The registry's other names
+  weren't checked. `@siliconcircus` counted 32 of all 102 in `maps/boardwalk.tsv`.
+- `@boardwalk` and `@siliconcircus` say **curio is leaving the `silicon-circus` org.** Thomas's plan
+  for curio (the hub) fits that, but he hasn't said anything to curio about the repository moving.
 
 ## Settled ways of keying (Thomas, 2026-10-08 and 2026-10-09)
 

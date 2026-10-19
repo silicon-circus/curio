@@ -22,8 +22,8 @@ never email.
 | `@datadungeon` | DD's API. curio reviews DD designs and asks for API additions (the 0.13 asks were all accepted), and the hub's needs went to it |
 | `@cattacula` | Cattacula's switch to the park store: on hold from 2026-10-13, off since 2026-10-17 (the store is boardwalk's) |
 | `@pirateship` | Also moving to DD 0.13; nothing exchanged yet |
-| `@boardwalk` | The boardwalk's own agent, up since 2026-10-19 (Thomas). The park store is its store, so mail about the store goes here, not through `@siliconcircus`. First asked how the park would draw from the store instead of `/a/` (see park-store.md) |
-| `@siliconcircus` | The park as a whole: where a venue lives, deployment, what the boardwalk asks of curio. Up since 2026-10-19 (Thomas) |
+| `@boardwalk` | The boardwalk's own agent, up since 2026-10-19 (Thomas). The park store is its store, and curio is handing it over (Thomas, 2026-10-19; see park-store.md). Mail about the store goes here, not through `@siliconcircus` |
+| `@siliconcircus` | The park as a whole: where a venue lives, deployment, what the boardwalk asks of curio. Up since 2026-10-19 (Thomas). Keeps the park-wide view of the handover; told where curio stands on 2026-10-19 |
 
 One message from `@codex` (2026-10-03) concerned another project's backup protocol, not curio. It
 is filed with the rest.

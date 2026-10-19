@@ -6,6 +6,18 @@ curio is the web UI for DataDungeon (DD) stores. Thomas decided this on 2026-10-
 server and stays UI-free. The old server, which served the park's files by name, is tagged
 `v0.3.2-server`.
 
+## Now: the boardwalk onto its own store, then the hub (Thomas, 2026-10-19)
+
+- **The boardwalk gets its own DataDungeon,** as Cattacula and Pirateship have theirs. curio has
+  looked after the park store only because curio grew out of the archive (later "assets") server
+  the boardwalk depended on, and still does.
+- **That handover is curio's whole job for now.** Thomas told `@siliconcircus` the same day that
+  `assets/` stays curio's until curio says it's done, and that the boardwalk will then mount DD's
+  handler and serve its own art. What's done and what's left is in
+  [park-store.md](park-store.md#handing-the-store-to-the-boardwalk).
+- **Then curio's goal is the hub,** through which DD stores share assets, and which does their
+  garbage collection. See [hub.md](hub.md).
+
 ## Releases
 
 | Version | Date | Commit | What |
@@ -96,5 +108,7 @@ by its `wordings` list.
   - curio can't add assets yet. dd-serve takes uploads from 0.15.1 (`POST /assets`, below), so the
     add button would be the first piece.
   - Ask `@datadungeon` first whether copying between stores is planned. Hold that mail for Thomas.
-- **The hub is deferred** (Thomas, 2026-10-16, relayed by `@datadungeon`). See [hub.md](hub.md).
+  - Since 2026-10-19 sharing is to go through the hub, so this may become part of it.
+- **The hub is next, after the boardwalk handover** (Thomas, 2026-10-19). It had been deferred since
+  2026-10-16. See [hub.md](hub.md).
 - The park store's own open items are in [park-store.md](park-store.md).

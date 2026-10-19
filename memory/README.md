@@ -14,10 +14,10 @@ working on the code needs belongs in the project's own docs, not here.
 
 | File | What it holds |
 |---|---|
-| [status.md](status.md) | Releases, which DataDungeon versions curio runs on, and what's open (DD 0.14 support: the prompt as sent, hash versions; DD 0.15 tagged) |
+| [status.md](status.md) | What curio is doing now (the boardwalk handover, then the hub), releases, which DataDungeon versions curio runs on, and what's open |
 | [decisions.md](decisions.md) | Thomas's decisions the code doesn't explain: the update-mode lock, one-screen pages, curio's override |
-| [park-store.md](park-store.md) | The park store (`siliconcircus.lol/assets`): on DD 0.15, and how each move was checked, boardwalk's store, with Cattacula's voices kept as a backup, keying, open items |
-| [hub.md](hub.md) | The hub that would know every store: deferred since 2026-10-16 (one owner per store), the earlier plan |
+| [park-store.md](park-store.md) | The park store (`siliconcircus.lol/assets`), boardwalk's, with Cattacula's voices kept as a backup: handing it to the boardwalk, how the park gets its art, each DD move and how it was checked, keying, open items |
+| [hub.md](hub.md) | The hub through which stores share assets and which does their garbage collection: curio's goal after the boardwalk handover (Thomas, 2026-10-19), and the earlier plans |
 | [coordination.md](coordination.md) | `@curio`, when mail needs Thomas's OK, and who curio talks to |
 
 Keep each note short and dated (`*Updated YYYY-MM-DD*`), with absolute
