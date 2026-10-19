@@ -1,6 +1,6 @@
 # The park store
 
-*Updated 2026-10-17*
+*Updated 2026-10-19*
 
 `siliconcircus.lol/assets` is a DD store made on 2026-10-07 and curated through curio. Its README
 covers the types, keys and serving. It is a separate local repository, and Thomas decided on
@@ -9,7 +9,13 @@ similar). Until that replica exists, the store has no off-machine copy.
 
 ## Where it stands
 
-- **DD 0.15.0 since 2026-10-17** (assets `bad3c6a`, at Thomas's word). It's one way again: 0.14 can't
+- **DD 0.15.3 since 2026-10-19** (assets `b66492d`, at Thomas's OK to rebuild for the upload route).
+  `~> 0.15.0` took 0.15.3 rather than 0.15.1. Neither 0.15.2 nor 0.15.3 converts a store one way:
+  the first open added the empty `asset_tracks` table and the `subtype` vocabulary tag, and 0.15.0
+  still opens the store. Rehearsed on a copy first, and checked against a snapshot from before: all
+  564 assets (1128 responses) and 27 queries the same, a clean check, the scripts compile.
+  `bin/dd-serve-0.15.0` is kept.
+- **DD 0.15.0 from 2026-10-17** (assets `bad3c6a`, at Thomas's word). It's one way again: 0.14 can't
   open the store, so anything that opens it directly must be on 0.15 too. The store had no purposes
   and no prompt fields, so the first open only dropped the empty `recipe_fields` table (and its two
   indexes) and the wordings' `purpose` column. It was rehearsed on a copy first, and the live result

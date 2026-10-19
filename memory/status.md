@@ -21,11 +21,19 @@ by its `wordings` list.
 
 ## Open
 
-- **An "add a picture" button: Thomas wants it** (relayed by `@datadungeon`, 2026-10-19;
-  `mail/received/20261019-055743Z-@datadungeon--datadungeon-v0.15.1-an-upload-route-for-curio-s-bu-35bdbf0d.md`). It's for pictures added by hand, with no prompt. `@datadungeon` asks curio to
-  plan the button. **Open, not started.**
-  - **DD 0.15.1** (`f9c4bc6`) adds only `POST /assets`, so `~> 0.15.0` takes it. The park's
-    `dd-serve` needs rebuilding to serve it.
+- **Adding a file by hand: built in `4358d05`, not released yet** (2026-10-19). Thomas wanted
+  pictures added by hand, with no prompt, and a button in curio for it (relayed by `@datadungeon`;
+  `mail/received/20261019-055743Z-@datadungeon--datadungeon-v0.15.1-an-upload-route-for-curio-s-bu-35bdbf0d.md`).
+  He OK'd the plan the same day; it would be curio 0.8.0.
+  - **What's built:** *+ Add a file* above the grid, or a file dropped anywhere on the page, opens a
+    form in the detail panel. *New take…* on an asset adds a file in its place. curio's
+    `POST …/assets` passes the form through with the write token, only in update mode, up to 256 MB.
+  - **Tried on a copy of the park store**, served by 0.15.3: an add, measured and with no recipe; a
+    file the type holds (409, with a button to the holder); the same file and tags again ("already
+    there"); a new take (old retired, its link copied, `supersedes` recorded); a drop with the switch
+    on and off. Two new tests cover the route (34 in all).
+  - **DD 0.15.1** (`f9c4bc6`) adds only `POST /assets`, so `~> 0.15.0` takes it. The park store has
+    it since 2026-10-19 (0.15.3, see park-store.md).
   - The request is `multipart/form-data` with the write token. `file` holds the bytes, and its
     `Content-Type` is the asset's. `asset` is JSON: `type`, `tags`, `custom`, `description`,
     `permanent`, `made_at` and `supersedes`.
@@ -34,9 +42,14 @@ by its `wordings` list.
   - Bytes the type already holds get a 409 with `asset_id` and `retired`. The same bytes with the
     same tags return that asset.
   - `description` says what the picture shows. It isn't a prompt.
-  - In curio the token stays in the config, so the browser would post to a curio route that adds it,
-    as every other write does, and only in update mode.
-  - `supersedes` makes this the way to do the piggybank tweak (see park-store.md).
+  - `supersedes` makes *New take…* the way to do the piggybank tweak (see park-store.md).
+- **DD 0.15.2 and 0.15.3 are tagged** (2026-10-19). No message reached curio about them; seen in
+  the tags when the park store was rebuilt. Both are additive and neither converts a store one way.
+  - **0.15.2:** DD's standard asset types, in `GET /vocabulary` (`types`), and a shared `subtype`
+    tag for an app's own kinds of a type.
+  - **0.15.3:** a take's tracks, what a tool measured of a sound or video over time
+    (`GET`/`PUT /assets/:id/tracks/:name`, `tracks` in `/vocabulary`), kept in a new `asset_tracks`
+    table. curio shows neither yet.
 - **DD 0.15.0 is tagged** (`58f1fa6`, 2026-10-17;
   `mail/received/20261017-224318Z-@datadungeon--datadungeon-v0.15.0-is-tagged-25613558.md`). It's a
   small cleanup, and its first read-write open converts a store one way, as before.
