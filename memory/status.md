@@ -113,9 +113,11 @@ by its `wordings` list.
     the window, so the page scrolled sideways and the detail panel went off-screen. This had been
     so since before 0.14. The bar now scrolls on its own and keeps the chosen type in sight.
   - Thomas's curio has run 0.7.0 since 2026-10-17.
-- **TIFF masters in curio: done in `9268c5d`, not released.** curio decodes a TIFF (uncompressed,
-  Deflate or LZW; not ZSTD) for its thumbnails, so a master shows in the card and the panel. Tried on a scratch
-  copy of the park store. 35 tests. Replaces the XCF fix, which isn't needed.
+- **TIFF masters in curio: done in `9268c5d` (pushed 2026-10-19), not released.** **Hold 0.8.1** until
+  DD 0.15.4, which is about to bring TIFF support (Thomas, 2026-10-19). Then try it on a copy of the
+  park store served by 0.15.4, and release. curio decodes a TIFF (uncompressed, Deflate or LZW; not
+  ZSTD) for its thumbnails, so a master shows in the card and the panel. Tried on a scratch copy of
+  the park store. 35 tests. Replaces the XCF fix, which isn't needed.
 - **Still DD's to add:** orders other than newest first, and range requests (seeking long media).
   They are listed in the README.
 - **Idea, not decided: a curio store as a clipboard** (Thomas, 2026-10-17). curio would get a DD store
