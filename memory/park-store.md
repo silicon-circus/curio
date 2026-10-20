@@ -131,7 +131,7 @@ curio subscribed to `#datadungeon` the same day.
   - dd-serve: once the handler is mounted, the park doesn't need it. curio's console still reads
     the store through it, with the write token.
 - **Thomas's to decide:** clearing the old backups and binaries (curio's leftovers), and retiring the
-  deployed old server once nothing points at it.
+  old test server online once nothing points at it.
 - `@siliconcircus` was told the same (`mail/sent/20261019-231449Z-@siliconcircus--curio-and-the-boardwalk-s-store-where-things-stand.md`). Its notes had
   Cattacula's voices as "in the wrong store", waiting on who removes them; curio passed on Thomas's
   2026-10-17 word that they stay.
@@ -147,9 +147,9 @@ curio subscribed to `#datadungeon` the same day.
   still answers `/a/boardwalk.deck.w640.webp` with a webp (checked 2026-10-19).
   `deploy/env.sample` points there. Production boardwalk is on 0.2.3 and draws bundled art.
 - **Thomas settled the format (relayed by `@boardwalk`, 2026-10-19):** the park serves webp only,
-  and every name it asks for becomes a stored webp; nothing converts on request. He'd like the
-  originals kept as GIMP's `.xcf`, converted from png, once curio's side is answered (below). Resizing
-  may come to DD later.
+  and every name it asks for becomes a stored webp; nothing converts on request. Resizing may come to
+  DD later. **The originals are eight-bit TIFFs in 64×64 tiles** (Thomas, worked out with
+  `@datadungeon`, 2026-10-19), not GIMP's `.xcf` as first asked (below).
 - **The format was the gap, not the width.** The park never asks `?w=`, and its two `w640` names are
   files stored under those names. But of the 48 names in the boardwalk's `src/assets.json`, only 12
   are stored under the name asked for. The other 36 are `.png` masters that the old server answered
@@ -167,12 +167,32 @@ curio subscribed to `#datadungeon` the same day.
 - **curio is leaving the `silicon-circus` org.** Thomas told `@siliconcircus` on 2026-10-19 that
   curio "will be moving out of silicon-circus org any way. it is now a general tool for use with
   datadungeon." He hasn't said it to curio; ask him.
-- **Don't upgrade or retire `curio.siliconcircus.lol` while the park draws from it**
-  (`@siliconcircus`, 2026-10-19). It serves exactly the park's 102 names, so the curio that exists
-  now would leave every venue on its 8-bit fallback. `park.sh doctor` also shows the local curio as
+- **There is no deployment** (Thomas, 2026-10-19): the old site online, `curio.siliconcircus.lol`
+  (curio 0.2.2, the park's 102 names), is only for testing. `@siliconcircus` had said production
+  draws from it and that retiring it would leave every venue on its 8-bit fallback; that holds only
+  for the test site. Retiring it is still Thomas's call. `park.sh doctor` shows the local curio as
   serving when `/a/` 404s, since it probes `/health`. That's the boardwalk's to fix.
 
-## Keeping masters as XCF: tried 2026-10-19
+## Keeping masters as TIFF (Thomas, 2026-10-19)
+
+Thomas worked it out with `@datadungeon`: **eight-bit TIFFs in 64×64 tiles**, instead of `.xcf`.
+Tiles help transfs keep what didn't change between saves.
+- **curio shows them** (`243bfed`, not released yet): it decodes a TIFF as it does a png, so the card
+  and the panel show its webp. The add form says the browser can't show it, instead of a broken
+  picture. Chromium names a `.tif` `image/tiff`. A test checks a tiled TIFF renders byte for byte as
+  its png does.
+- **Tried on a scratch copy** (served by 0.15.3, test curio 0.8.0 plus the change): #621 made into a
+  tiled TIFF by libvips and added through the form, then shown in the card and panel, cut-out intact.
+  Deflate, LZW and uncompressed all decode to the same thumbnail, 1024 wide in under 0.1 s. **ZSTD
+  doesn't decode** (the `tiff` crate leaves it out by default); GIMP doesn't write it anyway.
+- **Size of #621:** its png 1.6 MB (16-bit), the TIFF 0.9 MB with Deflate, 1.1 MB with LZW, 4.2 MB
+  uncompressed. Eight bits drops the depth of the 16-bit masters (about a third of the boardwalk's
+  pngs). Thomas chose eight bits.
+- **DD's side on 0.15.3:** stored as `image/tiff`, unconverted, on disk as `<hash>.bin`, with no width,
+  height or colour (its probe doesn't read TIFF). The header holds the size. That's DD's, with Thomas.
+- Who converts the 76 png masters, and when, isn't decided. curio isn't to start it.
+
+## Keeping masters as XCF: tried 2026-10-19, not chosen
 
 `@boardwalk` asked what `.xcf` masters would mean for curio
 (`mail/received/20261019-235320Z-@boardwalk--webp-served-xcf-originals-77744973.md`). It was tried on a
@@ -185,13 +205,11 @@ was added through curio 0.8.0's form. Answered in
   the browser can't draw an XCF. The form's preview is broken. There's no thumbnail (415): the
   `image` crate has no XCF reader. Don't add one, since only GIMP flattens layers, masks and filters
   faithfully.
-  - **The fix, once Thomas settles it:** show an XCF by its webp (found by `derived-from`); with none,
-    show "GIMP file", its size and a download. Name a `.xcf` file's type in the form when a browser
-    doesn't.
+  - The fix would have been to show an XCF by its webp (found by `derived-from`). Not needed: TIFF
+    was chosen instead (above).
 - **DD's side:** no width or height (its probe doesn't read XCF, though the header holds both), and it
   sits on disk as `<hash>.bin`.
 - **Size:** 2.5 MB as XCF against 1.6 MB as png (+62%) at GIMP 3's defaults.
-- Who converts the 76 png masters, and when, isn't decided. curio isn't to start it.
 
 ## Settled ways of keying (Thomas, 2026-10-08 and 2026-10-09)
 
@@ -204,6 +222,10 @@ was added through curio 0.8.0's form. Answered in
 - **The key is an index, not an identifier.** Identity is the row id, and the bytes are the
   `file_hash`. Nothing should depend on how a key is spelled.
 - **No number ever goes in a key.** Views, sizes, anchor, light and real size are picture fields.
+- **Stand-up has a key of its own** (Thomas, 2026-10-08): `bit beat` are "specific to stand-up
+  comedic acts", whose sets are bits of beats, so the voices had their own type, `stage-standup`,
+  keyed `venue act bit beat voice fmt`. Since 2026-10-19 the type is DD's standard `speech`, and the
+  structure lives in the park's key for `speech`, unchanged, not in the type's name.
 - **Don't propose a direction word as a key part.** I suggested one and withdrew it: Thomas pointed
   out it's only a coarse form of the view vector.
 
@@ -223,8 +245,10 @@ Then only photoreal (or fantasy) and pixel would need storing.
 
 - `goldie.webp` is for Thomas to check.
 - Cattacula's `cat.shadow`, `night.lights` and `night.trans-stripes` are undecided.
-- Kitty Marionette meows rather than speaks, so she needs her own `stage-…` type. It isn't designed
-  yet.
+- Kitty Marionette meows rather than speaks. In 2026-10-08's plan she needed her own `stage-…` type.
+  Under DD's standard types a meow is `speech` ("words or not"), and 0.16 refuses unlisted type
+  names, so her meows would be `speech` too, fitting its `bit beat` key or changing it. Thomas's to
+  design, with the boardwalk once it's theirs.
 - Pirateship's `i` (a line's index in its pool) should be renamed when Thomas gets to it; `line` was
   suggested.
 - The gangway (#587) has a made-up real height of 3.2 m from a test. Thomas was told to correct it.
