@@ -18,6 +18,10 @@ server and stays UI-free. The old server, which served the park's files by name,
   in on that decision. He expects it with DD 0.15.4 and 0.15.5, within hours. Then it goes to the
   boardwalk, and the remaining kinks are worked out with him. See
   [park-store.md](park-store.md#handing-the-store-to-the-boardwalk).
+- **The park store is on DD's standard types** (assets `089a279`, 2026-10-19), so curio's part is
+  done. The handover waits on Thomas's word.
+- **curio is to leave the `silicon-circus` org:** Thomas to `@siliconcircus`, 2026-10-19, "it is now
+  a general tool for use with datadungeon". He hasn't said it to curio yet.
 - **Then curio's goal is the hub,** through which DD stores share assets, and which does their
   garbage collection. See [hub.md](hub.md).
 
@@ -104,6 +108,8 @@ by its `wordings` list.
     the window, so the page scrolled sideways and the detail panel went off-screen. This had been
     so since before 0.14. The bar now scrolls on its own and keeps the chosen type in sight.
   - Thomas's curio has run 0.7.0 since 2026-10-17.
+- **XCF masters in curio** (small, waiting on Thomas to settle XCF): show an XCF by its webp, and
+  never as "no object". See [park-store.md](park-store.md#keeping-masters-as-xcf-tried-2026-10-19).
 - **Still DD's to add:** orders other than newest first, and range requests (seeking long media).
   They are listed in the README.
 - **Idea, not decided: a curio store as a clipboard** (Thomas, 2026-10-17). curio would get a DD store

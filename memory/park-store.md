@@ -9,6 +9,17 @@ similar). Until that replica exists, the store has no off-machine copy.
 
 ## Where it stands
 
+- **On DD's standard types since 2026-10-19** (assets `089a279`): `stage-standup` became `speech`,
+  piece 2 of DD's move (`mail/received/20261019-235136Z-@datadungeon--piece-2-of-datadungeon-s-asset-types-the-park-stor-aa12e52b.md`).
+  `prop` was standard already and stays as it is. `types.cr` registers `speech` and keeps the
+  `rename_type` call, which writes nothing once done. The import reads Cattacula's `voice` until
+  Cattacula has `speech`.
+  - Rehearsed on a copy, then live, backed up to `data/before-speech/`. Every row the same apart from
+    the type, the keys (only their index id), the search rows (`stage`, `standup` gone) and 488
+    change-log rows.
+  - Through dd-serve, all 564 assets, links and recipes and 14 queries answer as the backup did, and
+    all 488 lines match their hashes byte for byte. Integrity is ok, the files are untouched, and a
+    second `just types` changes nothing. Reported to `@datadungeon`.
 - **DD 0.15.3 since 2026-10-19** (assets `b66492d`, at Thomas's OK to rebuild for the upload route).
   `~> 0.15.0` took 0.15.3 rather than 0.15.1. Neither 0.15.2 nor 0.15.3 converts a store one way:
   the first open added the empty `asset_tracks` table and the `subtype` vocabulary tag, and 0.15.0
@@ -107,7 +118,8 @@ curio subscribed to `#datadungeon` the same day.
 
 - **Done:** the rebuild on DD 0.15.3 (assets `b66492d`). The repo is clean, and curio has nothing
   in progress in it (2026-10-19).
-- **Next, curio's:** moving the store onto DD's standard types, from the park's mapping note.
+- **Done 2026-10-19:** the move onto DD's standard types (see Where it stands). **The handover
+  now waits on Thomas's word.** He expected it once DD 0.15.4 and 0.15.5 are out.
 - **Open, after the handover:** importing the rest of the boardwalk's art. It waits on the types. Every store is moving onto DD's standard types (`#datadungeon` post 1,
   2026-10-19: Pirateship done, then Cattacula, the park and Owl), and each gets a note with its
   mapping. Mapping names by hand before then is work against a moving target.
@@ -134,10 +146,15 @@ curio subscribed to `#datadungeon` the same day.
 - **The deployed `curio.siliconcircus.lol` is the old server, curio 0.2.2**, serving 102 assets. It
   still answers `/a/boardwalk.deck.w640.webp` with a webp (checked 2026-10-19).
   `deploy/env.sample` points there. Production boardwalk is on 0.2.3 and draws bundled art.
-- **The format is the gap, not the width.** The park never asks `?w=`, and its two `w640` names are
+- **Thomas settled the format (relayed by `@boardwalk`, 2026-10-19):** the park serves webp only,
+  and every name it asks for becomes a stored webp; nothing converts on request. He'd like the
+  originals kept as GIMP's `.xcf`, converted from png, once curio's side is answered (below). Resizing
+  may come to DD later.
+- **The format was the gap, not the width.** The park never asks `?w=`, and its two `w640` names are
   files stored under those names. But of the 48 names in the boardwalk's `src/assets.json`, only 12
   are stored under the name asked for. The other 36 are `.png` masters that the old server answered
-  as `.webp`, converting on the fly (`src/serve.rs`, `src/derive.rs` at `v0.3.2-server`).
+  as `.webp`, converting on the fly (`src/serve.rs`, `src/derive.rs` at `v0.3.2-server`). The park
+  asks only for webp (47 names, and one mp3), so those 36 webps never existed as files.
   - DD's handler serves stored bytes and doesn't convert. Its shard has a png-to-webp encoder
     (`webp.cr`), but nothing calls it on request.
   - The props in the store are the masters too: #621's `curio-name` is
@@ -147,8 +164,34 @@ curio subscribed to `#datadungeon` the same day.
 - **Where the 48 are:** 15 have their master in the store, 33 only in curio's old files, and none
   is missing from both (by name without width or format, 2026-10-19). The registry's other names
   weren't checked. `@siliconcircus` counted 32 of all 102 in `maps/boardwalk.tsv`.
-- `@boardwalk` and `@siliconcircus` say **curio is leaving the `silicon-circus` org.** Thomas's plan
-  for curio (the hub) fits that, but he hasn't said anything to curio about the repository moving.
+- **curio is leaving the `silicon-circus` org.** Thomas told `@siliconcircus` on 2026-10-19 that
+  curio "will be moving out of silicon-circus org any way. it is now a general tool for use with
+  datadungeon." He hasn't said it to curio; ask him.
+- **Don't upgrade or retire `curio.siliconcircus.lol` while the park draws from it**
+  (`@siliconcircus`, 2026-10-19). It serves exactly the park's 102 names, so the curio that exists
+  now would leave every venue on its 8-bit fallback. `park.sh doctor` also shows the local curio as
+  serving when `/a/` 404s, since it probes `/health`. That's the boardwalk's to fix.
+
+## Keeping masters as XCF: tried 2026-10-19
+
+`@boardwalk` asked what `.xcf` masters would mean for curio
+(`mail/received/20261019-235320Z-@boardwalk--webp-served-xcf-originals-77744973.md`). It was tried on a
+scratch copy: GIMP 3.2.6 made an XCF from #621's png in batch (`gimp-console` with its Python), and it
+was added through curio 0.8.0's form. Answered in
+`mail/sent/20261020-000347Z-@boardwalk--re-webp-served-xcf-originals-tried-it-nothing-in-t.md`.
+- **What works:** Chromium names it `image/x-xcf`. DD stores it as a `prop` keyed
+  `….barrel.xcf`, unconverted, and it downloads intact.
+- **What's wrong in curio:** the card says "no object", and the panel says the store has none, because
+  the browser can't draw an XCF. The form's preview is broken. There's no thumbnail (415): the
+  `image` crate has no XCF reader. Don't add one, since only GIMP flattens layers, masks and filters
+  faithfully.
+  - **The fix, once Thomas settles it:** show an XCF by its webp (found by `derived-from`); with none,
+    show "GIMP file", its size and a download. Name a `.xcf` file's type in the form when a browser
+    doesn't.
+- **DD's side:** no width or height (its probe doesn't read XCF, though the header holds both), and it
+  sits on disk as `<hash>.bin`.
+- **Size:** 2.5 MB as XCF against 1.6 MB as png (+62%) at GIMP 3's defaults.
+- Who converts the 76 png masters, and when, isn't decided. curio isn't to start it.
 
 ## Settled ways of keying (Thomas, 2026-10-08 and 2026-10-09)
 
