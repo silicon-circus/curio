@@ -112,8 +112,11 @@ immutable. The hash arrives in the URL, so it is **checked, not trusted**: the b
 they arrive, and a thumbnail is kept only under the hash it actually has.
 
 Scaling is premultiplied-alpha Mitchell — cut-out props have transparent edges that a naive resize
-haloes — and pictures are never enlarged. SVG is shown as itself; audio, video and text get a player
-or a preview in the detail panel instead of a thumbnail.
+haloes — and pictures are never enlarged. PNG, JPEG, WebP, GIF and TIFF are decoded. **A TIFF master**
+(tiled, as DataDungeon 0.15.4 stores and measures them) is seen only through its thumbnail, since
+Safari is the one browser that draws TIFF; uncompressed, Deflate and LZW decode, ZSTD doesn't. SVG is
+shown as itself; audio, video and text get a player or a preview in the detail panel instead of a
+thumbnail.
 
 ## Reading the console
 
