@@ -21,7 +21,8 @@ server and stays UI-free. The old server, which served the park's files by name,
 - **The park store is on DD's standard types** (assets `089a279`, 2026-10-19), so curio's part is
   done. The handover waits on Thomas's word.
 - **The park's masters are eight-bit TIFFs in 64×64 tiles** (Thomas with `@datadungeon`,
-  2026-10-19), not `.xcf`. curio shows them since `243bfed` (not released). See
+  2026-10-19), not `.xcf`, and not compressed (Deflate at most), for transfs's chunking. curio
+  shows them since `9268c5d` (not released). See
   [park-store.md](park-store.md#keeping-masters-as-tiff-thomas-2026-10-19).
 - **There is no deployment** (Thomas, 2026-10-19): the old curio online is only for testing.
 - **curio is to leave the `silicon-circus` org:** Thomas to `@siliconcircus`, 2026-10-19, "it is now
@@ -112,8 +113,8 @@ by its `wordings` list.
     the window, so the page scrolled sideways and the detail panel went off-screen. This had been
     so since before 0.14. The bar now scrolls on its own and keeps the chosen type in sight.
   - Thomas's curio has run 0.7.0 since 2026-10-17.
-- **TIFF masters in curio: done in `243bfed`, not released.** curio decodes a TIFF (Deflate, LZW or
-  none; not ZSTD) for its thumbnails, so a master shows in the card and the panel. Tried on a scratch
+- **TIFF masters in curio: done in `9268c5d`, not released.** curio decodes a TIFF (uncompressed,
+  Deflate or LZW; not ZSTD) for its thumbnails, so a master shows in the card and the panel. Tried on a scratch
   copy of the park store. 35 tests. Replaces the XCF fix, which isn't needed.
 - **Still DD's to add:** orders other than newest first, and range requests (seeking long media).
   They are listed in the README.

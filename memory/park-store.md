@@ -176,21 +176,24 @@ curio subscribed to `#datadungeon` the same day.
 ## Keeping masters as TIFF (Thomas, 2026-10-19)
 
 Thomas worked it out with `@datadungeon`: **eight-bit TIFFs in 64×64 tiles**, instead of `.xcf`.
-Tiles help transfs keep what didn't change between saves.
+**Not compressed** (Thomas, 2026-10-19: "I think deflate is ok though"): DD's file store is to be
+transfs, an immutable Merkle tree that dedups by FastCDC chunking, so the tiles and raw bytes let it
+keep what didn't change between saves. curio had suggested Deflate or LZW to `@boardwalk` and
+`@datadungeon` before that, and corrected it.
 The park still serves webp only, each webp linked `derived-from` its master (`@boardwalk`,
 `mail/received/20261020-010854Z-@boardwalk--tiff-not-xcf-feaa7eb8.md`, which crossed with curio's
 answer `mail/sent/20261020-011046Z-@boardwalk--masters-as-tiled-tiff-not-xcf-curio-shows-them.md`).
-- **curio shows them** (`243bfed`, not released yet): it decodes a TIFF as it does a png, so the card
-  and the panel show its webp. The add form says the browser can't show it, instead of a broken
-  picture. Chromium names a `.tif` `image/tiff`. A test checks a tiled TIFF renders byte for byte as
-  its png does.
+- **curio shows them** (`9268c5d`, first committed as `243bfed`; not released yet): it decodes a
+  TIFF as it does a png, so the card and the panel show its webp. The add form says the browser can't show it, instead of a broken
+  picture. Chromium names a `.tif` `image/tiff`. A test checks that tiled TIFFs, uncompressed and
+  deflated, render byte for byte as their pngs do.
 - **Tried on a scratch copy** (served by 0.15.3, test curio 0.8.0 plus the change): #621 made into a
   tiled TIFF by libvips and added through the form, then shown in the card and panel, cut-out intact.
   Deflate, LZW and uncompressed all decode to the same thumbnail, 1024 wide in under 0.1 s. **ZSTD
   doesn't decode** (the `tiff` crate leaves it out by default); GIMP doesn't write it anyway.
-- **Size of #621:** its png 1.6 MB (16-bit), the TIFF 0.9 MB with Deflate, 1.1 MB with LZW, 4.2 MB
-  uncompressed. Eight bits drops the depth of the 16-bit masters (about a third of the boardwalk's
-  pngs). Thomas chose eight bits.
+- **Size of #621:** its png 1.6 MB (16-bit); as a tiled TIFF, 4.2 MB uncompressed, 0.9 MB with
+  Deflate, 1.1 MB with LZW. Eight bits drops the depth of the 16-bit masters (about a third of the
+  boardwalk's pngs). Thomas chose eight bits.
 - **DD's side on 0.15.3:** stored as `image/tiff`, unconverted, on disk as `<hash>.bin`, with no width,
   height or colour (its probe doesn't read TIFF). The header holds the size. That's DD's, with Thomas.
 - Who converts the 76 png masters, and when, isn't decided. curio isn't to start it.
@@ -229,6 +232,9 @@ was added through curio 0.8.0's form. Answered in
   comedic acts", whose sets are bits of beats, so the voices had their own type, `stage-standup`,
   keyed `venue act bit beat voice fmt`. Since 2026-10-19 the type is DD's standard `speech`, and the
   structure lives in the park's key for `speech`, unchanged, not in the type's name.
+  - **Open (Thomas, 2026-10-19):** he'll talk to Cattacula about stand-up. DD's `subtype` tag
+    (0.15.2, one shared tag for an app's own kinds of a type, which can be in a key) is an option:
+    stand-up and Kitty's meows as kinds of `speech`. Adding it to the key would re-key the 488.
 - **Don't propose a direction word as a key part.** I suggested one and withdrew it: Thomas pointed
   out it's only a coarse form of the view vector.
 
