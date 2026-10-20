@@ -40,6 +40,7 @@ server and stays UI-free. The old server, which served the park's files by name,
 | 0.7.0 | 2026-10-17 | `ac96b8b` | DD 0.14: the recipe panel shows the prompt and instructions as sent, with each named wording marked; "any version" takes hash versions; a store with many types scrolls the type bar instead of widening the page |
 | 0.8.0 | 2026-10-19 | `f5ed8fb` | adding a file by hand (DD 0.15.1's `POST /assets`): a form in the detail panel, a dropped file, *New take…* |
 | 0.8.1 | 2026-10-19 | `dd6b739` | TIFF masters show as pictures: curio thumbnails them (`9268c5d`), as DD 0.15.4 stores and measures them |
+| 0.9.0 | 2026-10-19 | `a8ddcf9` | masters (`6a7838e`, DD 0.15.4): the add form stores a png or TIFF as a tiled TIFF master, and *Make WebP* stores a master's webp linked `derived-from` it |
 
 curio runs on DD 0.11.2 through 0.15. A 0.13 store is detected by `has_recipe` appearing on an
 asset, and an older store simply doesn't show the 0.13 parts. A 0.14 recipe is told from a 0.13 one
@@ -114,13 +115,13 @@ by its `wordings` list.
     the window, so the page scrolled sideways and the detail panel went off-screen. This had been
     so since before 0.14. The bar now scrolls on its own and keeps the chosen type in sight.
   - Thomas's curio has run 0.7.0 since 2026-10-17.
-- **Masters in curio, from DD 0.15.4: done in `6a7838e`, not pushed or released** (Thomas said yes
-  2026-10-19). The add form offers *Store it: as a tiled TIFF master* for a png or TIFF (DD's
+- **Masters in curio, from DD 0.15.4: released in 0.9.0** (`6a7838e`, released as `a8ddcf9`, tag
+  `v0.9.0`, pushed 2026-10-19 at Thomas's word). Thomas's curio runs 0.9.0. The add form offers *Store it: as a tiled TIFF master* for a png or TIFF (DD's
   `normalize`/`tiff`), and a tag naming a png's format follows the choice (`fmt` png ↔ tif) in view.
   *Make WebP* on a png or TIFF asks for its webp (quality 85, a format tag saying `webp`) and opens
   it; one already made is found, not made twice (DD answers a repeat with the existing webp, not a
   409). A store on an older DD says so. Tried on two copies of the park store, served by 0.15.4 and
-  0.15.3. Release waits on Thomas.
+  0.15.3.
 - **TIFF masters in curio: released in 0.8.1** (`dd6b739`, tag `v0.8.1`, pushed 2026-10-19), held
   until DD 0.15.4 at Thomas's word and tried on a copy of the park store served by it first (see
   park-store.md). Thomas's curio runs 0.8.1. curio decodes a TIFF (uncompressed, Deflate or LZW; not
