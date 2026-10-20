@@ -114,6 +114,13 @@ by its `wordings` list.
     the window, so the page scrolled sideways and the detail panel went off-screen. This had been
     so since before 0.14. The bar now scrolls on its own and keeps the chosen type in sight.
   - Thomas's curio has run 0.7.0 since 2026-10-17.
+- **Masters in curio, from DD 0.15.4: done in `dfe2963`, not pushed or released** (Thomas said yes
+  2026-10-19). The add form offers *Store it: as a tiled TIFF master* for a png or TIFF (DD's
+  `normalize`/`tiff`), and a tag naming a png's format follows the choice (`fmt` png ↔ tif) in view.
+  *Make WebP* on a png or TIFF asks for its webp (quality 85, a format tag saying `webp`) and opens
+  it; one already made is found, not made twice (DD answers a repeat with the existing webp, not a
+  409). A store on an older DD says so. Tried on two copies of the park store, served by 0.15.4 and
+  0.15.3. Release waits on Thomas.
 - **TIFF masters in curio: released in 0.8.1** (`dd6b739`, tag `v0.8.1`, pushed 2026-10-19), held
   until DD 0.15.4 at Thomas's word and tried on a copy of the park store served by it first (see
   park-store.md). Thomas's curio runs 0.8.1. curio decodes a TIFF (uncompressed, Deflate or LZW; not
