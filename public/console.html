@@ -444,7 +444,7 @@ function middle(text, max) {
 function glyph(a) {
   return { audio: "♪", video: "▶", text: "¶" }[a.media] || "◇";
 }
-function isRaster(ct) { return /^image\/(png|jpeg|webp|gif)/.test(ct || ""); }
+function isRaster(ct) { return /^image\/(png|jpeg|webp|gif|tiff)/.test(ct || ""); }
 function thumbURL(a, px) {
   const w = Math.min(1024, Math.ceil(px * (window.devicePixelRatio || 1)));
   return `${S()}/assets/${a.id}/thumb/${a.file_hash}?w=${w}`;
@@ -1632,7 +1632,8 @@ function renderAdding() {
   const pick = () => picker.click();
   const f = ad.file;
   const shown = !f ? h("button", { className: "dropzone", onclick: pick }, h("b", null, "Choose a file"), h("span", null, "or drop one here"))
-    : /^image\//.test(f.type) ? h("img", { src: ad.url, alt: f.name })
+    : /^image\//.test(f.type) ? h("img", { src: ad.url, alt: f.name, onerror: (e) => e.target.replaceWith(h("p", { className: "mute" },
+        isRaster(f.type) ? "This browser can't show it, but curio will once it's added." : "This browser can't show it.")) })
     : /^audio\//.test(f.type) ? h("audio", { controls: true, src: ad.url })
     : /^video\//.test(f.type) ? h("video", { controls: true, src: ad.url })
     : h("span", { className: "glyph", style: "font: 600 48px var(--display); color: var(--mute)" }, "◇");

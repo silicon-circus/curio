@@ -26,7 +26,12 @@ use std::sync::Arc;
 use tokio::sync::Semaphore;
 
 /// The formats worth decoding. Anything else gets an icon in the console, not a thumbnail.
-pub const RASTER: &[&str] = &["image/png", "image/jpeg", "image/webp", "image/gif"];
+///
+/// TIFF IS HERE FOR THE MASTERS. The park keeps its originals as eight-bit TIFFs in 64×64 tiles,
+/// uncompressed (Deflate at most), because DataDungeon's files are to live in transfs, which finds
+/// what two saves share by chunking (Thomas, 2026-10-19).
+/// Only Safari can show a TIFF, so curio's webp is how anyone else sees one.
+pub const RASTER: &[&str] = &["image/png", "image/jpeg", "image/webp", "image/gif", "image/tiff"];
 
 /// The largest object curio will pull in to make a thumbnail of.
 pub const MAX_SOURCE_BYTES: usize = 96 << 20;
@@ -321,6 +326,20 @@ mod tests {
         let out = decoded(&render(&png(800, 400, false), 320).unwrap());
         assert_eq!((out.width(), out.height()), (320, 160));
         assert!(!out.color().has_alpha(), "an opaque picture gets no alpha plane");
+    }
+
+    /// Pictures from `png` saved by libvips as a master is kept: eight bits in 64×64 tiles,
+    /// uncompressed (70×10) or deflated with the horizontal predictor (200×100). Neither size fills
+    /// its tiles, so the part-filled ones on the right and bottom are checked too.
+    #[test]
+    fn a_tiled_tiff_master_renders_exactly_as_its_png_does() {
+        let none = include_bytes!("testdata/tiled-rgba-none.tif");
+        assert_eq!(render(none, 320).unwrap(), render(&png(70, 10, true), 320).unwrap());
+        assert_eq!(render(none, 64).unwrap(), render(&png(70, 10, true), 64).unwrap());
+        let deflated = include_bytes!("testdata/tiled-rgba.tif");
+        assert_eq!(render(deflated, 320).unwrap(), render(&png(200, 100, true), 320).unwrap());
+        assert_eq!(render(deflated, 128).unwrap(), render(&png(200, 100, true), 128).unwrap());
+        assert!(is_raster("image/tiff"));
     }
 
     #[test]
