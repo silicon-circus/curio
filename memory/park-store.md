@@ -136,7 +136,8 @@ curio subscribed to `#datadungeon` the same day.
     before it is made, the prompt in its recipe; after, its `words` track; a `transcript` asset
     only "for words that are a thing of their own". **Open (Thomas, 2026-10-20):** he doubts that
     a `words` track is the same thing as a transcript, and finds the "of their own" wording
-    misleading. Nothing has been sent to `@datadungeon` about it yet. The park's 488 speech copies
+    misleading. At his request curio told `@datadungeon` why, and suggested a wording
+    (`mail/sent/20261020-150536Z-@datadungeon--thomas-doubts-that-a-words-track-can-stand-in-for.md`). The park's 488 speech copies
     have no recipe and no tracks, so they follow whatever Cattacula does with hers.
 - **Open, after the handover:** importing the rest of the boardwalk's art. It waits on the types. Every store is moving onto DD's standard types (`#datadungeon` post 1,
   2026-10-19: Pirateship done, then Cattacula, the park and Owl), and each gets a note with its
