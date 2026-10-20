@@ -39,6 +39,7 @@ server and stays UI-free. The old server, which served the park's files by name,
 | 0.6.0 | 2026-10-14 | `accd565` | DD 0.13: the "How it was made" recipe panel, finding by a shared file, description or named wording, changing a shared description everywhere, Permanent |
 | 0.7.0 | 2026-10-17 | `ac96b8b` | DD 0.14: the recipe panel shows the prompt and instructions as sent, with each named wording marked; "any version" takes hash versions; a store with many types scrolls the type bar instead of widening the page |
 | 0.8.0 | 2026-10-19 | `f5ed8fb` | adding a file by hand (DD 0.15.1's `POST /assets`): a form in the detail panel, a dropped file, *New take…* |
+| 0.8.1 | 2026-10-19 | `dd6b739` | TIFF masters show as pictures: curio thumbnails them (`9268c5d`), as DD 0.15.4 stores and measures them |
 
 curio runs on DD 0.11.2 through 0.15. A 0.13 store is detected by `has_recipe` appearing on an
 asset, and an older store simply doesn't show the 0.13 parts. A 0.14 recipe is told from a 0.13 one
@@ -113,9 +114,9 @@ by its `wordings` list.
     the window, so the page scrolled sideways and the detail panel went off-screen. This had been
     so since before 0.14. The bar now scrolls on its own and keeps the chosen type in sight.
   - Thomas's curio has run 0.7.0 since 2026-10-17.
-- **TIFF masters in curio: done in `9268c5d` (pushed 2026-10-19), not released.** **Hold 0.8.1** until
-  DD 0.15.4, which is about to bring TIFF support (Thomas, 2026-10-19). Then try it on a copy of the
-  park store served by 0.15.4, and release. curio decodes a TIFF (uncompressed, Deflate or LZW; not
+- **TIFF masters in curio: released in 0.8.1** (`dd6b739`, tag `v0.8.1`, pushed 2026-10-19), held
+  until DD 0.15.4 at Thomas's word and tried on a copy of the park store served by it first (see
+  park-store.md). Thomas's curio runs 0.8.1. curio decodes a TIFF (uncompressed, Deflate or LZW; not
   ZSTD) for its thumbnails, so a master shows in the card and the panel. Tried on a scratch copy of
   the park store. 35 tests. Replaces the XCF fix, which isn't needed.
 - **Still DD's to add:** orders other than newest first, and range requests (seeking long media).

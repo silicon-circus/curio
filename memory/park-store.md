@@ -207,6 +207,14 @@ answer `mail/sent/20261020-011046Z-@boardwalk--masters-as-tiled-tiff-not-xcf-cur
   - `POST /assets/:id/webp {"tags": {"fmt": "webp"}, "quality": 85}` stores a master's webp as its
     own asset, linked `derived-from` it, with its description and fields.
   - `.xcf` is stored as `.xcf`, unread.
+- **0.15.4 tried on a copy** (2026-10-19, `dd-serve` built from 0.15.4 in a copy of the repo, which
+  links libtiff 4.7.2; only `shard.lock` changes). Opening it changes no schema. Measuring again
+  changed 17 pictures, exactly the 17 16-bit pngs, and only `dominant_color` (17), `content_h` (3)
+  and `content_y` (2); #557 went `#514C50` → `#130D0F`. An uncompressed tiled TIFF of #621 added
+  through curio's form is stored as `.tif`, measured the same as #621 itself, and shown. #621's png
+  uploaded with `normalize`/`tiff` came back 8-bit, 64×64 tiles, deflated (0.9 MB). The webp route
+  made #622's webp, linked `derived-from` it, and curio shows the link. **The live store isn't moved
+  yet:** that waits on Thomas.
 - **The props need measuring again on 0.15.4.** Before it, DD read a 16-bit png with no gamma chunk
   as linear light (too bright), and interlaced ones wrongly besides. 17 of the store's 27 pngs are
   16-bit; #557, Cattacula's night front, is recorded as `#514C50` but is `#130D0F`. On 0.15.4,
