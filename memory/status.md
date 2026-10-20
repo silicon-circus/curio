@@ -20,7 +20,8 @@ server and stays UI-free. The old server, which served the park's files by name,
   are worked out with him. See
   [park-store.md](park-store.md#handing-the-store-to-the-boardwalk).
 - **The park store is on DD's standard types** (assets `089a279`, 2026-10-19), so curio's part is
-  done. The handover waits on Thomas's word.
+  done, and on DD 0.16.0 since 2026-10-20 (assets `c9f3674`), which takes only those names. The
+  handover waits on Thomas's word.
 - **The park's masters are eight-bit TIFFs in 64×64 tiles** (Thomas with `@datadungeon`,
   2026-10-19), not `.xcf`, deflated as DD 0.15.4 writes them (settled 2026-10-20). curio
   shows them since 0.8.1, and 0.9.0 adds them from the form and makes their WebPs. See

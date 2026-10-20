@@ -141,15 +141,17 @@ curio subscribed to `#datadungeon` the same day.
     tool's timing of the words, not their text; a clip made from a prompt usually needs no
     transcript. **Open:** where subtitles go. The park's 488 speech copies have no recipe, tracks
     or transcripts, so they follow whatever Cattacula does with hers.
-- **DD 0.15.7 and 0.16.0 are out (2026-10-20); the park's `dd-serve` is still 0.15.4.**
-  - 0.15.7 (`e31e97e`) adds search by meaning. **To build `dd-serve` from it, the park's
-    `shard.yml` needs `memo`** (`github: openbohemians/memo`, `version: ~> 0.13.1`) beside
-    `usearch` and `awscr-s3`, plus libmagic (installed here); without it `just build` stops with
-    "can't find file 'memo'". Search only runs with `DD_EMBED_MODEL` and `DD_EMBED_KEY`, and a
-    type is embedded only if registered with `embed:`, so nothing goes to a paid model unasked.
-  - 0.16.0 (`2f9d585`) refuses type names not on DD's list; `~> 0.15.0` doesn't take it. The park
-    uses only `prop` and `speech`, so it's ready. `audio_meta.transcript_id` is deprecated and kept.
-  - Moving to either needs Thomas's word, and may fall to the boardwalk after the handover.
+- **Done 2026-10-20: the store is on DD 0.16.0** (assets `c9f3674`; Thomas: "moving should be
+  pretty straightforward").
+  - 0.16 refuses type names not on DD's list; the park has only `prop` and `speech`.
+  - 0.15.7 added search by meaning, so the park's `shard.yml` now lists `memo` (`~> 0.13.1`), and
+    building `dd-serve` needs libmagic as well as libtiff. memo's `pg` pins `crystal-db` to 0.14.0,
+    as DD's own lock does, so `db` and `sqlite3` went back a version each. Search stays off without
+    `DD_EMBED_MODEL` and `DD_EMBED_KEY`, and covers only types registered with `embed:` (none).
+  - Opening added `asset_types.embed` (`'[]'`) and nothing else; `just types` and the old
+    `stage-standup` rename write nothing. Rehearsed on a copy first: curio 0.9.0 showed, played,
+    thumbnailed and made a WebP through it. Live, curio showed, played and thumbnailed it. The
+    0.15.4 `dd-serve` still opens the moved store. Server left stopped.
 - **Open, after the handover:** importing the rest of the boardwalk's art. It waits on the types. Every store is moving onto DD's standard types (`#datadungeon` post 1,
   2026-10-19: Pirateship done, then Cattacula, the park and Owl), and each gets a note with its
   mapping. Mapping names by hand before then is work against a moving target.
