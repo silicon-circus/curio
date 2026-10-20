@@ -177,6 +177,9 @@ curio subscribed to `#datadungeon` the same day.
 
 Thomas worked it out with `@datadungeon`: **eight-bit TIFFs in 64×64 tiles**, instead of `.xcf`.
 Tiles help transfs keep what didn't change between saves.
+The park still serves webp only, each webp linked `derived-from` its master (`@boardwalk`,
+`mail/received/20261020-010854Z-@boardwalk--tiff-not-xcf-feaa7eb8.md`, which crossed with curio's
+answer `mail/sent/20261020-011046Z-@boardwalk--masters-as-tiled-tiff-not-xcf-curio-shows-them.md`).
 - **curio shows them** (`243bfed`, not released yet): it decodes a TIFF as it does a png, so the card
   and the panel show its webp. The add form says the browser can't show it, instead of a broken
   picture. Chromium names a `.tif` `image/tiff`. A test checks a tiled TIFF renders byte for byte as
