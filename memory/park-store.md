@@ -195,7 +195,23 @@ answer `mail/sent/20261020-011046Z-@boardwalk--masters-as-tiled-tiff-not-xcf-cur
   Deflate, 1.1 MB with LZW. Eight bits drops the depth of the 16-bit masters (about a third of the
   boardwalk's pngs). Thomas chose eight bits.
 - **DD's side on 0.15.3:** stored as `image/tiff`, unconverted, on disk as `<hash>.bin`, with no width,
-  height or colour (its probe doesn't read TIFF). The header holds the size. That's DD's, with Thomas.
+  height or colour (its probe doesn't read TIFF). **Closed in DD 0.15.4** (`a229a4a`, 2026-10-20,
+  `#datadungeon` post 3, and
+  `mail/received/20261020-012414Z-@datadungeon--re-tiled-tiff-masters-0.15.4-closes-both-gaps-the-f42b5aea.md`):
+  - A `dd-serve` built from 0.15.4 needs libtiff (`require "data_dungeon/tiff"`). It stores a TIFF as
+    `.tif` and measures it like a png.
+  - `"image": {"compression": "normalize", "target_format": "tiff"}` in an upload's asset JSON makes
+    DD rewrite a TIFF or png as 8-bit 64×64 deflate tiles, so nobody tiles by hand. Deflated, which
+    Thomas says is OK. DD measured on transfs: a small stroke over 37 pictures costs 1.9 MiB
+    uncompressed against 2.6 deflated, but the first copy 70 MiB against 57.
+  - `POST /assets/:id/webp {"tags": {"fmt": "webp"}, "quality": 85}` stores a master's webp as its
+    own asset, linked `derived-from` it, with its description and fields.
+  - `.xcf` is stored as `.xcf`, unread.
+- **The props need measuring again on 0.15.4.** Before it, DD read a 16-bit png with no gamma chunk
+  as linear light (too bright), and interlaced ones wrongly besides. 17 of the store's 27 pngs are
+  16-bit; #557, Cattacula's night front, is recorded as `#514C50` but is `#130D0F`. On 0.15.4,
+  `POST /maintenance/measure {"all": true}` measures every picture again, changing only measured
+  fields.
 - Who converts the 76 png masters, and when, isn't decided. curio isn't to start it.
 
 ## Keeping masters as XCF: tried 2026-10-19, not chosen
