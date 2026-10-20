@@ -440,6 +440,17 @@ pub async fn measure(State(state): St, Path(name): Path<String>, headers: Header
     write(&state, &name, &headers, Method::POST, &["maintenance", "measure"], None, Some(body)).await
 }
 
+/// `{tags, quality}`: have DataDungeon (0.15.4) store a picture's webp as an asset of its own, its tags
+/// with these over them, linked `derived-from` it. A TIFF master gets the webp a venue serves this way.
+pub async fn webp(
+    State(state): St,
+    Path((name, id)): Path<(String, i64)>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    write(&state, &name, &headers, Method::POST, &["assets", &id.to_string(), "webp"], None, Some(body)).await
+}
+
 /// `{rel, name}` or `{rel, to}`: link this asset to a name (`used-by` boardwalk) or to another asset.
 pub async fn link(
     State(state): St,

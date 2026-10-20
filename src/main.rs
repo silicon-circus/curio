@@ -52,6 +52,7 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route(&format!("{s}/assets/{{id}}/recipe"), get(routes::recipe))
         .route(&format!("{s}/assets/{{id}}/retire"), post(routes::retire))
         .route(&format!("{s}/assets/{{id}}/reinstate"), post(routes::reinstate))
+        .route(&format!("{s}/assets/{{id}}/webp"), post(routes::webp))
         .route(&format!("{s}/assets/{{id}}/object"), get(routes::object))
         .route(&format!("{s}/assets/{{id}}/thumb/{{hash}}"), get(routes::thumb))
         .route(&format!("{s}/check"), post(routes::check))

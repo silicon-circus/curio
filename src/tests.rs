@@ -69,6 +69,7 @@ async fn fake_dd(seen: Seen, uploads: Uploads) -> String {
                 ("GET", "/assets/1/recipe") => json(r#"{"recipe":{"form":"picture","fields":{},"steps":[]}}"#),
                 ("GET", "/assets/2/recipe") => (StatusCode::NOT_FOUND, r#"{"error":"Asset 2 has no recipe"}"#).into_response(),
                 ("POST", "/assets/1/retire") | ("POST", "/assets/1/reinstate") => json(r#"{"asset":{"id":1}}"#),
+                ("POST", "/assets/1/webp") => json(r#"{"asset":{"id":10}}"#),
                 ("POST", "/maintenance/prune") => json(r#"{"pruned":0}"#),
                 ("POST", "/maintenance/measure") => json(r#"{"measured":0}"#),
                 ("POST", "/assets/1/links") => json(r#"{"from":[]}"#),
@@ -251,10 +252,11 @@ async fn a_recipe_is_a_read_and_one_missing_says_so() {
 }
 
 #[tokio::test]
-async fn retiring_reinstating_and_pruning_are_writes_like_any_other() {
+async fn retiring_reinstating_pruning_and_making_a_webp_are_writes_like_any_other() {
     let r = Rig::new("retire").await;
     let calls = [("/api/stores/curated/assets/1/retire", "/assets/1/retire"),
                  ("/api/stores/curated/assets/1/reinstate", "/assets/1/reinstate"),
+                 ("/api/stores/curated/assets/1/webp", "/assets/1/webp"),
                  ("/api/stores/curated/prune", "/maintenance/prune"),
                  ("/api/stores/curated/measure", "/maintenance/measure")];
     for (ours, _) in calls {

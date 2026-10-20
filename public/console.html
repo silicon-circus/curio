@@ -445,6 +445,8 @@ function glyph(a) {
   return { audio: "♪", video: "▶", text: "¶" }[a.media] || "◇";
 }
 function isRaster(ct) { return /^image\/(png|jpeg|webp|gif|tiff)/.test(ct || ""); }
+// What a master can be: DataDungeon 0.15.4 stores either as a tiled TIFF and makes a WebP of either.
+function isMaster(ct) { return /^image\/(png|tiff)$/.test(ct || ""); }
 function thumbURL(a, px) {
   const w = Math.min(1024, Math.ceil(px * (window.devicePixelRatio || 1)));
   return `${S()}/assets/${a.id}/thumb/${a.file_hash}?w=${w}`;
@@ -1202,6 +1204,9 @@ function renderDetail() {
             h("button", { className: "plain", onclick: () => { state.editing = null; renderDetail(); } }, "Cancel")]
          : h("button", { className: "plain", onclick: edit }, "Edit tags and description"),
       h("span", { style: "flex:1" }),
+      a.retired_at || !isMaster(a.content_type) ? null : h("button", { className: "plain",
+        title: "Store a WebP of it as an asset of its own, linked derived-from it (quality 85)",
+        onclick: () => makeWebp(a, tags) }, "Make WebP"),
       a.retired_at ? null : h("button", { className: "plain", title: "Add a file in its place: this one is retired, and its links carry over",
         onclick: () => startAdding({ from: state.record }) }, "New take…"),
       a.retired_at ? null : h("button", { className: "plain", title: "Hide it from listings and search, and keep it; reinstate undoes it",
@@ -1574,7 +1579,7 @@ function startAdding({ file, from } = {}) {
   const rows = a ? sortedTags(from.tags).map(([k, v]) => ({ k, v, trait: traitsOf(type).includes(k) })) : startingRows(type);
   closeDetail(true);
   state.adding = { type, rows, description: a ? a.description || "" : "", permanent: !!(a && a.permanent),
-                   made: "", supersedes: a ? a.id : null, file: null, url: null, held: null, busy: false };
+                   made: "", supersedes: a ? a.id : null, file: null, url: null, held: null, busy: false, tiles: false };
   if (file) choose(file);
   openPanel();
   renderAdding();
@@ -1682,6 +1687,11 @@ function renderAdding() {
       h("span", { className: "eyebrow", style: "margin:0" }, "Permanent"),
       h("button", { className: "plain", "aria-pressed": String(ad.permanent), title: "A permanent asset is never evicted for lack of use",
         onclick: () => { ad.permanent = !ad.permanent; renderAdding(); } }, ad.permanent ? "Yes, never evicted" : "No")),
+    f && isMaster(f.type) ? h("div", { className: "row" },
+      h("span", { className: "eyebrow", style: "margin:0" }, "Store it"),
+      h("button", { className: "plain", "aria-pressed": String(ad.tiles),
+        title: "DataDungeon 0.15.4 rewrites it as an 8-bit TIFF in 64×64 tiles, deflated",
+        onclick: () => setTiles(!ad.tiles) }, ad.tiles ? "As a tiled TIFF master" : "As it is")) : null,
 
     ad.held ? h("p", { className: "note" }, `${ad.type} already holds this file, as #${ad.held.id}${ad.held.retired ? ", retired" : ""}. `,
       h("button", { className: "plain", onclick: () => select(ad.held.id) }, `Open #${ad.held.id}`)) : null,
@@ -1707,6 +1717,8 @@ async function addIt() {
   if (ad.permanent) asset.permanent = true;
   if (ad.made) asset.made_at = ad.made;
   if (ad.supersedes) asset.supersedes = ad.supersedes;
+  const tiling = ad.tiles && isMaster(ad.file.type);
+  if (tiling) asset.image = { compression: "normalize", target_format: "tiff" };
   const form = new FormData();
   form.append("file", ad.file);
   form.append("asset", JSON.stringify(asset));
@@ -1716,25 +1728,67 @@ async function addIt() {
   try {
     const out = await api(`${S()}/assets`, { method: "POST", body: form });
     const id = out.asset.id;
-    // The same file with the same tags, already current, comes back as the asset that holds it: one
-    // on this page, or one stored before this was asked (with a minute's grace for the clocks).
-    const before = state.assets.some((x) => x.id === id)
-      || Date.parse(String(out.asset.created_at).replace(" ", "T") + "Z") < asked - 60000;
-    toast(before ? `Already there: #${id} holds this file, with these tags.`
+    const before = alreadyThere(out.asset, asked);
+    // A DataDungeon older than 0.15.4 doesn't know how to tile, and stores the file as it came.
+    if (tiling && out.asset.content_type !== "image/tiff")
+      toast(`Added #${id} as it is: ${state.store}'s DataDungeon is older than 0.15.4, which tiles.`, true);
+    else toast(before ? `Already there: #${id} holds this file, with these tags.`
       : ad.supersedes ? `Added #${id} in place of #${ad.supersedes}, which is retired.` : `Added #${id} to ${state.store}.`);
-    state.types = await api(`${S()}/types`).catch(() => state.types);
-    renderTypes();
-    state.keys = {};
-    loadKeys();
-    state.counted = null;
-    await loadAssets(state.page);
-    select(id);
+    await showAdded(id);
   } catch (e) {
     if (state.adding !== ad) return toast(e.message, true);
     ad.busy = false;
     if (e.status === 409 && e.body && e.body.asset_id) ad.held = { id: e.body.asset_id, retired: e.body.retired };
     else toast(e.message, true);
     renderAdding();
+  }
+}
+
+// The same file with the same tags, already current, comes back as the asset that holds it: one on
+// this page, or one stored before this was asked (with a minute's grace for the clocks).
+function alreadyThere(asset, asked) {
+  return state.assets.some((x) => x.id === asset.id)
+    || Date.parse(String(asset.created_at).replace(" ", "T") + "Z") < asked - 60000;
+}
+
+// A new asset can bring a new type, tag or value, so all of those are asked for again before it opens.
+async function showAdded(id) {
+  state.types = await api(`${S()}/types`).catch(() => state.types);
+  renderTypes();
+  state.keys = {};
+  loadKeys();
+  state.counted = null;
+  await loadAssets(state.page);
+  select(id);
+}
+
+// A png stored as a TIFF would keep `fmt png` in its key, so a tag naming the file's format follows
+// the choice, where it can be seen before the file is added.
+function setTiles(on) {
+  const ad = state.adding;
+  ad.tiles = on;
+  if (ad.file && ad.file.type === "image/png")
+    for (const r of ad.rows) if (r.v === (on ? "png" : "tif")) r.v = on ? "tif" : "png";
+  renderAdding();
+}
+
+// A MASTER'S WEBP (DataDungeon 0.15.4): an asset of its own, linked derived-from the master, with its
+// tags, description and fields. A tag naming the master's format names webp on the copy, so the two
+// keep separate keys.
+async function makeWebp(a, tags) {
+  const over = Object.fromEntries(Object.entries(tags).filter(([, v]) => /^(png|tiff?)$/.test(v)).map(([k]) => [k, "webp"]));
+  const asked = Date.now();
+  try {
+    const out = await api(`${S()}/assets/${a.id}/webp`, { method: "POST", body: { tags: over, quality: 85 } });
+    toast(alreadyThere(out.asset, asked) ? `Its WebP is already there: #${out.asset.id}.` : `Made #${out.asset.id}, the WebP of #${a.id}.`);
+    await showAdded(out.asset.id);
+  } catch (e) {
+    if (e.status === 409 && e.body && e.body.asset_id) {
+      toast(`Its WebP is already there: #${e.body.asset_id}${e.body.retired ? ", retired" : ""}.`);
+      select(e.body.asset_id);
+    } else if (e.status === 404 || e.status === 405) {
+      toast(`${state.store}'s DataDungeon is older than 0.15.4, which makes WebPs.`, true);
+    } else toast(e.message, true);
   }
 }
 

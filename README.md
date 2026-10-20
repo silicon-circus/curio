@@ -72,6 +72,12 @@ simply finds it. *New take…* on an asset adds a file in its place, starting fr
 description: the old one is retired, and its links carry over. curio passes on files of up to
 256 MB.
 
+**Masters** (DataDungeon 0.15.4): a PNG or TIFF can be stored *as a tiled TIFF master*, which the
+store rewrites as an 8-bit TIFF in 64×64 tiles, deflated; a tag naming the file's format (`fmt png`)
+follows the choice. *Make WebP* on a PNG or TIFF stores its WebP (quality 85) as an asset of its own,
+linked `derived-from` it, with its tags, a format tag saying `webp`. A store on an older DataDungeon
+says so rather than failing quietly.
+
 **A description can be shared.** A room's description is one text, used by every picture of the room.
 Editing it changes this asset's words alone, unless you tick *Change it on all N assets that share
 it*; the old words are kept, since a recipe may record them as what a provider was sent. Saving an
@@ -213,6 +219,7 @@ Everything under `/api/stores/<name>/` is that store's DataDungeon API, passed t
 | `PATCH` `DELETE` | `…/assets/:id` | edit (`{tags, description, everywhere, rating, flagged, permanent, image}`) or delete — update mode |
 | `POST` `DELETE` | `…/assets/:id/links` | link (`{rel, name}` or `{rel, to}`, with optional `data`) or unlink (`?rel=&name=`) — update mode |
 | `POST` | `…/assets/:id/retire`, `…/assets/:id/reinstate` | hide and keep, or bring back — update mode |
+| `POST` | `…/assets/:id/webp` | `{tags, quality}`: store a picture's WebP, linked `derived-from` it (DataDungeon 0.15.4) — update mode |
 | `POST` | `…/assets` | a file added by hand: `multipart/form-data` with a `file` part and an `asset` part (`{type, tags, custom, description, permanent, made_at, supersedes}`), passed through as it came; 409 with `asset_id` when the type already holds the file — update mode |
 | `POST` | `…/prune` | `{type, keep_last, retired_before}`: delete retired assets for good — update mode |
 | `POST` | `…/measure` | `{type, all}`: have the store measure its pictures — update mode |

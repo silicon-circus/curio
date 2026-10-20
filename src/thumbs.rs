@@ -28,8 +28,8 @@ use tokio::sync::Semaphore;
 /// The formats worth decoding. Anything else gets an icon in the console, not a thumbnail.
 ///
 /// TIFF IS HERE FOR THE MASTERS. The park keeps its originals as eight-bit TIFFs in 64×64 tiles,
-/// uncompressed (Deflate at most), because DataDungeon's files are to live in transfs, which finds
-/// what two saves share by chunking (Thomas, 2026-10-19).
+/// deflated, as DataDungeon 0.15.4 writes them (Thomas, 2026-10-20). Tiles let transfs, where
+/// DataDungeon's files are to live, find what two saves share by chunking.
 /// Only Safari can show a TIFF, so curio's webp is how anyone else sees one.
 pub const RASTER: &[&str] = &["image/png", "image/jpeg", "image/webp", "image/gif", "image/tiff"];
 
