@@ -132,13 +132,24 @@ curio subscribed to `#datadungeon` the same day.
   renames the standard type `map` to `pass`, and the park has only `prop` (76) and `speech` (488).
   The store's `dd-serve` is still 0.15.4. Rebuilding is optional and needs Thomas's word, as every
   move has.
-  - The rule for a recording's words in 0.15.5 (`@datadungeon`'s proposal, which Thomas agreed to):
-    before it is made, the prompt in its recipe; after, its `words` track; a `transcript` asset
-    only "for words that are a thing of their own". **Open (Thomas, 2026-10-20):** he doubts that
-    a `words` track is the same thing as a transcript, and finds the "of their own" wording
-    misleading. At his request curio told `@datadungeon` why, and suggested a wording
-    (`mail/sent/20261020-150536Z-@datadungeon--thomas-doubts-that-a-words-track-can-stand-in-for.md`). The park's 488 speech copies
-    have no recipe and no tracks, so they follow whatever Cattacula does with hers.
+  - **Where a recording's words go, settled in DD 0.15.7** (`#datadungeon` post 6, 2026-10-20).
+    0.15.5 had a `transcript` only "for words that are a thing of their own". Thomas doubted that a
+    `words` track could stand in for one, curio told `@datadungeon` why
+    (`mail/sent/20261020-150536Z-@datadungeon--thomas-doubts-that-a-words-track-can-stand-in-for.md`),
+    and DD agreed. Now: a `transcript` is the words as text (corrected by hand, with who speaks,
+    with sounds that aren't words), linked `transcript-of` its recording; a `words` track is a
+    tool's timing of the words, not their text; a clip made from a prompt usually needs no
+    transcript. **Open:** where subtitles go. The park's 488 speech copies have no recipe, tracks
+    or transcripts, so they follow whatever Cattacula does with hers.
+- **DD 0.15.7 and 0.16.0 are out (2026-10-20); the park's `dd-serve` is still 0.15.4.**
+  - 0.15.7 (`e31e97e`) adds search by meaning. **To build `dd-serve` from it, the park's
+    `shard.yml` needs `memo`** (`github: openbohemians/memo`, `version: ~> 0.13.1`) beside
+    `usearch` and `awscr-s3`, plus libmagic (installed here); without it `just build` stops with
+    "can't find file 'memo'". Search only runs with `DD_EMBED_MODEL` and `DD_EMBED_KEY`, and a
+    type is embedded only if registered with `embed:`, so nothing goes to a paid model unasked.
+  - 0.16.0 (`2f9d585`) refuses type names not on DD's list; `~> 0.15.0` doesn't take it. The park
+    uses only `prop` and `speech`, so it's ready. `audio_meta.transcript_id` is deprecated and kept.
+  - Moving to either needs Thomas's word, and may fall to the boardwalk after the handover.
 - **Open, after the handover:** importing the rest of the boardwalk's art. It waits on the types. Every store is moving onto DD's standard types (`#datadungeon` post 1,
   2026-10-19: Pirateship done, then Cattacula, the park and Owl), and each gets a note with its
   mapping. Mapping names by hand before then is work against a moving target.
