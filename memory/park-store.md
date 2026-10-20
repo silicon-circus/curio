@@ -1,6 +1,6 @@
 # The park store
 
-*Updated 2026-10-19*
+*Updated 2026-10-20*
 
 `siliconcircus.lol/assets` is a DD store made on 2026-10-07 and curated through curio. Its README
 covers the types, keys and serving. It is a separate local repository, and Thomas decided on
@@ -116,7 +116,7 @@ DD's HTTP handler in its own server and serves its own art**, instead of pointin
 anywhere, and `assets/` stays curio's until curio says it's done. The mount waits on that.
 
 **The order (Thomas, 2026-10-19):** curio keeps the store until it has moved onto DD's standard
-types, since curio was in on that decision. He expects that with DD 0.15.4 and 0.15.5, within hours.
+types, since curio was in on that decision. He expected that with DD 0.15.4 and 0.15.5, within hours.
 Then it goes to the boardwalk, and the remaining kinks (the mount, the webp question, the rest of
 the art, where the store lives) are worked out with him. `@boardwalk`, `@siliconcircus` and
 `@datadungeon` were told, and asked `@datadungeon` to send the park's mapping note to `@curio`.
@@ -125,7 +125,19 @@ curio subscribed to `#datadungeon` the same day.
 - **Done:** the rebuild on DD 0.15.3 (assets `b66492d`). The repo is clean, and curio has nothing
   in progress in it (2026-10-19).
 - **Done 2026-10-19:** the move onto DD's standard types (see Where it stands). **The handover
-  now waits on Thomas's word.** He expected it once DD 0.15.4 and 0.15.5 are out.
+  now waits on Thomas's word.** He expected it once DD 0.15.4 and 0.15.5 are out, and they are
+  (`#datadungeon` posts 3 to 5, through 0.15.6 on 2026-10-20).
+- **0.15.5 and 0.15.6 change nothing here** (checked 2026-10-20). 0.15.5 clears a clip's
+  `transcript_id` when its transcript is deleted, and none of the park's clips has one. 0.15.6
+  renames the standard type `map` to `pass`, and the park has only `prop` (76) and `speech` (488).
+  The store's `dd-serve` is still 0.15.4. Rebuilding is optional and needs Thomas's word, as every
+  move has.
+  - The rule for a recording's words in 0.15.5 (`@datadungeon`'s proposal, which Thomas agreed to):
+    before it is made, the prompt in its recipe; after, its `words` track; a `transcript` asset
+    only "for words that are a thing of their own". **Open (Thomas, 2026-10-20):** he doubts that
+    a `words` track is the same thing as a transcript, and finds the "of their own" wording
+    misleading. Nothing has been sent to `@datadungeon` about it yet. The park's 488 speech copies
+    have no recipe and no tracks, so they follow whatever Cattacula does with hers.
 - **Open, after the handover:** importing the rest of the boardwalk's art. It waits on the types. Every store is moving onto DD's standard types (`#datadungeon` post 1,
   2026-10-19: Pirateship done, then Cattacula, the park and Owl), and each gets a note with its
   mapping. Mapping names by hand before then is work against a moving target.

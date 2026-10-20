@@ -1,6 +1,6 @@
 # Status
 
-*Updated 2026-10-19*
+*Updated 2026-10-20*
 
 curio is the web UI for DataDungeon (DD) stores. Thomas decided this on 2026-10-07: DD is the asset
 server and stays UI-free. The old server, which served the park's files by name, is tagged
@@ -15,14 +15,15 @@ server and stays UI-free. The old server, which served the park's files by name,
   `assets/` stays curio's until curio says it's done, and that the boardwalk will then mount DD's
   handler and serve its own art.
 - **curio keeps the store until it's on DD's standard types** (Thomas, 2026-10-19), since curio was
-  in on that decision. He expects it with DD 0.15.4 and 0.15.5, within hours. Then it goes to the
-  boardwalk, and the remaining kinks are worked out with him. See
+  in on that decision. He expected it with DD 0.15.4 and 0.15.5; both are out (0.15.5 `5ad4fe9`,
+  2026-10-20), and 0.15.6 (`8236d73`) too. Then it goes to the boardwalk, and the remaining kinks
+  are worked out with him. See
   [park-store.md](park-store.md#handing-the-store-to-the-boardwalk).
 - **The park store is on DD's standard types** (assets `089a279`, 2026-10-19), so curio's part is
   done. The handover waits on Thomas's word.
 - **The park's masters are eight-bit TIFFs in 64×64 tiles** (Thomas with `@datadungeon`,
   2026-10-19), not `.xcf`, deflated as DD 0.15.4 writes them (settled 2026-10-20). curio
-  shows them since `9268c5d` (not released). See
+  shows them since 0.8.1, and 0.9.0 adds them from the form and makes their WebPs. See
   [park-store.md](park-store.md#keeping-masters-as-tiff-thomas-2026-10-19).
 - **There is no deployment** (Thomas, 2026-10-19): the old curio online is only for testing.
 - **curio is to leave the `silicon-circus` org:** Thomas to `@siliconcircus`, 2026-10-19, "it is now
