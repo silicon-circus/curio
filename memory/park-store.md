@@ -9,6 +9,12 @@ similar). Until that replica exists, the store has no off-machine copy.
 
 ## Where it stands
 
+- **DD 0.15.4 since 2026-10-19** (assets `3a074cf`, at Thomas's word): TIFF masters, and the 16-bit
+  pngs measured again. Done as rehearsed (below, under TIFF): backed up to `data/before-0.15.4/`
+  (database and files), `bin/dd-serve-0.15.3` kept, `dd-serve` rebuilt (it links libtiff now, noted in
+  the README). `POST /maintenance/measure {"all": true}` changed the 17 16-bit pngs' measurements
+  only, the same values as the rehearsal, and added 76 change-log rows. No schema change, integrity
+  and foreign keys pass, files untouched, scripts compile. The server was stopped afterwards.
 - **On DD's standard types since 2026-10-19** (assets `089a279`): `stage-standup` became `speech`,
   piece 2 of DD's move (`mail/received/20261019-235136Z-@datadungeon--piece-2-of-datadungeon-s-asset-types-the-park-stor-aa12e52b.md`).
   `prop` was standard already and stays as it is. `types.cr` registers `speech` and keeps the
@@ -213,8 +219,8 @@ answer `mail/sent/20261020-011046Z-@boardwalk--masters-as-tiled-tiff-not-xcf-cur
   and `content_y` (2); #557 went `#514C50` → `#130D0F`. An uncompressed tiled TIFF of #621 added
   through curio's form is stored as `.tif`, measured the same as #621 itself, and shown. #621's png
   uploaded with `normalize`/`tiff` came back 8-bit, 64×64 tiles, deflated (0.9 MB). The webp route
-  made #622's webp, linked `derived-from` it, and curio shows the link. **The live store isn't moved
-  yet:** that waits on Thomas.
+  made #622's webp, linked `derived-from` it, and curio shows the link. The live store moved the
+  same day (see Where it stands).
 - **The props need measuring again on 0.15.4.** Before it, DD read a 16-bit png with no gamma chunk
   as linear light (too bright), and interlaced ones wrongly besides. 17 of the store's 27 pngs are
   16-bit; #557, Cattacula's night front, is recorded as `#514C50` but is `#130D0F`. On 0.15.4,
