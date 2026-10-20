@@ -182,10 +182,13 @@ curio subscribed to `#datadungeon` the same day.
 ## Keeping masters as TIFF (Thomas, 2026-10-19)
 
 Thomas worked it out with `@datadungeon`: **eight-bit TIFFs in 64×64 tiles**, instead of `.xcf`.
-**Not compressed** (Thomas, 2026-10-19: "I think deflate is ok though"): DD's file store is to be
-transfs, an immutable Merkle tree that dedups by FastCDC chunking, so the tiles and raw bytes let it
-keep what didn't change between saves. curio had suggested Deflate or LZW to `@boardwalk` and
-`@datadungeon` before that, and corrected it.
+**Deflate-compressed, as DD 0.15.4 writes them** (Thomas, settled 2026-10-20, relayed by
+`@datadungeon`: `mail/received/20261020-023012Z-@datadungeon--tiff-masters-stay-deflate-compressed-thomas-2026-1-31b4371e.md`).
+DD's file store is to be transfs, an immutable Merkle tree that dedups by FastCDC chunking. On
+2026-10-19 Thomas had said uncompressed for its sake, with Deflate maybe OK; DD's numbers settled it:
+on transfs a picture's first copy is 1.5 MB deflated against 1.9 MB uncompressed, and a small edit
+costs only 22 KB more; off transfs, uncompressed is three times the size. curio's form option
+(`normalize`/`tiff`) gives these masters; an uncompressed TIFF uploaded without it is kept as it is.
 The park still serves webp only, each webp linked `derived-from` its master (`@boardwalk`,
 `mail/received/20261020-010854Z-@boardwalk--tiff-not-xcf-feaa7eb8.md`, which crossed with curio's
 answer `mail/sent/20261020-011046Z-@boardwalk--masters-as-tiled-tiff-not-xcf-curio-shows-them.md`).

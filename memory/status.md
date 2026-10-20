@@ -21,7 +21,7 @@ server and stays UI-free. The old server, which served the park's files by name,
 - **The park store is on DD's standard types** (assets `089a279`, 2026-10-19), so curio's part is
   done. The handover waits on Thomas's word.
 - **The park's masters are eight-bit TIFFs in 64×64 tiles** (Thomas with `@datadungeon`,
-  2026-10-19), not `.xcf`, and not compressed (Deflate at most), for transfs's chunking. curio
+  2026-10-19), not `.xcf`, deflated as DD 0.15.4 writes them (settled 2026-10-20). curio
   shows them since `9268c5d` (not released). See
   [park-store.md](park-store.md#keeping-masters-as-tiff-thomas-2026-10-19).
 - **There is no deployment** (Thomas, 2026-10-19): the old curio online is only for testing.
@@ -114,7 +114,7 @@ by its `wordings` list.
     the window, so the page scrolled sideways and the detail panel went off-screen. This had been
     so since before 0.14. The bar now scrolls on its own and keeps the chosen type in sight.
   - Thomas's curio has run 0.7.0 since 2026-10-17.
-- **Masters in curio, from DD 0.15.4: done in `dfe2963`, not pushed or released** (Thomas said yes
+- **Masters in curio, from DD 0.15.4: done in `6a7838e`, not pushed or released** (Thomas said yes
   2026-10-19). The add form offers *Store it: as a tiled TIFF master* for a png or TIFF (DD's
   `normalize`/`tiff`), and a tag naming a png's format follows the choice (`fmt` png ↔ tif) in view.
   *Make WebP* on a png or TIFF asks for its webp (quality 85, a format tag saying `webp`) and opens
